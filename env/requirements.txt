@@ -1,0 +1,11 @@
+torch
+numpy
+transformers[torch]
+evaluate
+datasets
+tiktoken
+wandb
+tqdm
+nltk
+einops
+jaxtyping
