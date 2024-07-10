@@ -1,23 +1,14 @@
-# Usage: python scripts/prepare_dataset.py --num_samples=10
+# Usage: python scripts/prepare_dataset.py --context_length=128
 
 import argparse
-from data import BertPreprocessor
-from data.load import get_dataset
-from transformers import BertTokenizer
+from data.bert_dataset import BertDataset
 
 
-def prepare_dataset(num_samples: int = 100_000):
-    tokenizer = BertTokenizer.from_pretrained("google-bert/bert-base-uncased")
-
-    dataset = get_dataset(raw=True)
-
-    bert_preprocessor = BertPreprocessor()
-    preprocessed_dataset = bert_preprocessor(dataset, tokenizer, num_samples=num_samples)
-
-    return preprocessed_dataset
+def prepare_dataset(context_length: int = 128):
+    return BertDataset.prepare(context_length)
 
 
 parser = argparse.ArgumentParser(description="Prepare dataset")
-parser.add_argument("--num_samples", type=int, help="Number of samples to prepare")
+parser.add_argument("--context_length", type=int, help="Context length to prepare")
 args = parser.parse_args()
 prepare_dataset(**args.__dict__)

@@ -9,3 +9,4 @@ tqdm
 nltk
 einops
 jaxtyping
+seaborn
