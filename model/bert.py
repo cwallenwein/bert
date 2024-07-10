@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from model.config import BertConfig
-from model.attention import MultiHeadAttention
+from model.attention import MultiHeadAttentionFromScratch
 
 # Typehints
 from jaxtyping import Float
@@ -87,7 +87,7 @@ class BertEncoderLayer(nn.Module):
             activations[config.feed_forward_activation](),
             nn.Linear(config.feed_forward_intermediate_size, config.d_model),
         )
-        self.multi_head_attention = MultiHeadAttention(config)
+        self.multi_head_attention = MultiHeadAttentionFromScratch(config)
 
     def forward(
         self,

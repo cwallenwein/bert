@@ -83,6 +83,66 @@ class MultiHeadAttention(nn.Module):
 
         self.config = config
 
+        self.query_weight = nn.Linear(config.d_model, config.n_heads * config.d_head)
+        self.key_weight = nn.Linear(config.d_model, config.n_heads * config.d_head)
+        self.value_weight = nn.Linear(config.d_model, config.n_heads * config.d_head)
+        self.output_weight = nn.Linear(config.d_model, config.d_model)
+
+    def forward(
+        self,
+        x: Float[Tensor, "batch seq_len d_model"],
+        attention_mask: Bool[Tensor, "batch seq_len"]
+    ):
+        query = rearrange(
+            self.query_weight(x),
+            "batch seq_len (n_heads d_head) -> batch seq_len n_heads d_head",
+            n_heads=self.config.n_heads
+        )
+        key = rearrange(
+            self.key_weight(x),
+            "batch seq_len (n_heads d_head) -> batch seq_len n_heads d_head",
+            n_heads=self.config.n_heads
+        )
+        value = rearrange(
+            self.value_weight(x),
+            "batch seq_len (n_heads d_head) -> batch seq_len n_heads d_head",
+            n_heads=self.config.n_heads
+        )
+
+        attention_score = einsum(
+            query, key,
+            "batch query_len n_heads d_head, batch key_len n_heads d_head -> batch n_heads query_len key_len"
+        )
+
+        mask = torch.where(attention_mask, 0, float("inf"))[:, None, None, :]
+        attention_score -= mask
+
+        attention_probability = F.softmax(
+            attention_score / math.sqrt(self.config.d_head),
+            dim=3
+        )
+
+        attention_output = einsum(
+            attention_probability, value,
+            "batch n_heads query_len key_len, batch key_len n_heads d_head -> batch n_heads query_len d_head"
+        )
+
+        attention_output = rearrange(
+            attention_output,
+            "batch n_heads seq_len d_head -> batch seq_len (n_heads d_head)"
+        )
+
+        output = self.output_weight(attention_output)
+
+        return output
+
+
+class MultiHeadAttentionFromScratch(nn.Module):
+    def __init__(self, config: BertConfig):
+        super().__init__()
+
+        self.config = config
+
         self.query_weight: Float[Tensor, "n_heads d_model d_head"] = nn.Parameter(
             torch.randn(config.n_heads, config.d_model, config.d_head)
         )

@@ -1,7 +1,6 @@
 import argparse
-from trainer import SimpleTrainer
+from trainer import Trainer
 from trainer.arguments import TrainingArguments
-from data.load import get_dataset
 from model import BertModel, BertConfig
 
 
@@ -9,32 +8,31 @@ def train(args):
     config = BertConfig.from_dict(args)
     model = BertModel(config)
     training_args = TrainingArguments.from_dict(args)
-    trainer = SimpleTrainer(model, training_args)
+    trainer = Trainer(model, training_args)
 
-    training_steps = args["training_steps"]
-    long_context_length = args["long_context_length"]
-    long_context_pct = args["long_context_pct"]
+    if args["context_length"] is not None and args["training_steps"] is not None:
+        context_length = args["context_length"]
+        training_steps = args["training_steps"]
+        assert args["short_context_length"] is None
+        assert args["long_context_length"] is None
+        assert args["short_context_training_steps"] is None
+        assert args["long_context_training_steps"] is None
 
-    if long_context_length is None:
-        assert long_context_pct == 0
-        dataset = get_dataset(mlm_and_nsp=True, context_length=args["context_length"])
-        trainer.train(dataset=dataset, training_steps=training_steps)
+        trainer.train(training_steps=training_steps, context_length=context_length)
     else:
-        assert long_context_pct is not None
-        dataset = get_dataset(mlm_and_nsp=True)
-        assert len(dataset.keys()) == 2
-        short_context_dataset_key, long_context_dataset_key = sorted(dataset.keys())
-        assert args["context_length"] == int(short_context_dataset_key)
-        assert long_context_length == int(long_context_dataset_key)
+        short_context_length = args["short_context_length"]
+        long_context_length = args["long_context_length"]
+        short_context_training_steps = args["short_context_training_steps"]
+        long_context_training_steps = args["long_context_training_steps"]
+        assert short_context_length is not None
+        assert long_context_length is not None
+        assert short_context_training_steps is not None
+        assert long_context_training_steps is not None
+        assert args["context_length"] is None
+        assert args["training_steps"] is None
 
-        short_context_dataset = dataset[short_context_dataset_key]
-        long_context_dataset = dataset[long_context_dataset_key]
-        trainer.train(
-            dataset=short_context_dataset,
-            training_steps=training_steps,
-            long_context_pct=long_context_pct,
-            long_context_dataset=long_context_dataset
-        )
+        trainer.train(training_steps=short_context_training_steps, context_length=short_context_length)
+        trainer.train(training_steps=long_context_training_steps, context_length=long_context_length)
 
 
 parser = argparse.ArgumentParser(description="Train BERT model")
@@ -61,8 +59,12 @@ parser.add_argument("--beta2", type=float, default=0.999)
 
 # Other arguments
 parser.add_argument("--training_steps", type=int)
+parser.add_argument("--context_length", type=int)
+
+parser.add_argument("--short_context_length", type=int)
+parser.add_argument("--short_context_training_steps", type=int)
 parser.add_argument("--long_context_length", type=int)
-parser.add_argument("--long_context_pct", type=float, default=0)
+parser.add_argument("--long_context_training_steps", type=int)
 
 args = parser.parse_args()
 train(args=args.__dict__)
