@@ -24,38 +24,52 @@ class TrainerForPreTraining:
 
         self.model.train()
 
-        running_loss = None
+        running_total_loss = None
+        running_mlm_loss = None
+        running_nsp_loss = None
         progress_bar = tqdm(dataset, total=training_steps, desc="Training", unit=" batches")
         for batch in dataset:
             self.optimizer.zero_grad()
 
             masked_language_modeling_output, next_sentence_prediction_output = self.model(**batch)
 
-            # Masked language modeling loss
-            masked_tokens = batch["masked_tokens"].bool()
-            masked_token_predictions = masked_language_modeling_output[masked_tokens]
-            masked_token_labels = batch["labels"][masked_tokens]
-            masked_language_modeling_loss = self.loss_fn(masked_token_predictions, masked_token_labels)
-
-            # Next sentence prediction loss
-            next_sentence_prediction_labels = batch["labels"][..., 0]
-            next_sentence_prediction_loss = self.loss_fn(
-                next_sentence_prediction_output, next_sentence_prediction_labels
+            masked_language_modeling_loss = self.calculate_masked_language_modeling_loss(
+                batch, masked_language_modeling_output
             )
-
+            next_sentence_prediction_loss = self.calculate_next_sentence_prediction_loss(
+                batch, next_sentence_prediction_output
+            )
             loss = masked_language_modeling_loss + next_sentence_prediction_loss
+
             loss.backward()
             self.optimizer.step()
 
-            if not running_loss:
-                running_loss = loss.item()
+            if not running_total_loss and not running_mlm_loss and not running_nsp_loss:
+                running_total_loss = loss.item()
+                running_mlm_loss = masked_language_modeling_loss.item()
+                running_nsp_loss = next_sentence_prediction_loss.item()
             else:
-                running_loss = 0.5 * loss.item() + 0.5 * running_loss
-            progress_bar.set_description(
-                f"MLM loss: {masked_language_modeling_loss: .4f} - NSP loss: {next_sentence_prediction_loss: .4f}"
-            )
-            # progress_bar.set_description(f"Training (loss: {running_loss: .4f})")
+                running_total_loss = 0.5 * loss.item() + 0.5 * running_total_loss
+                running_mlm_loss = 0.5 * masked_language_modeling_loss.item() + 0.5 * running_mlm_loss
+                running_nsp_loss = 0.5 * next_sentence_prediction_loss.item() + 0.5 * running_nsp_loss
+
+            progress_bar.set_description(f"Training loss: {running_total_loss: .4f} (MLM: {running_mlm_loss: .4f}, NSP: {running_nsp_loss: .4f})")
             progress_bar.update(1)
 
-        # progress_bar.set_description(f"Avg loss: {running_loss: .4f})")
+        progress_bar.set_description(
+            f"Avg loss: {running_total_loss: .4f} (MLM: {running_mlm_loss: .4f}, NSP: {running_nsp_loss: .4f})")
         progress_bar.close()
+
+    def calculate_masked_language_modeling_loss(self, batch, masked_language_modeling_output):
+        masked_tokens = batch["masked_tokens"].bool()
+        masked_token_predictions = masked_language_modeling_output[masked_tokens]
+        masked_token_labels = batch["labels"][masked_tokens]
+        masked_language_modeling_loss = self.loss_fn(masked_token_predictions, masked_token_labels)
+        return masked_language_modeling_loss
+
+    def calculate_next_sentence_prediction_loss(self, batch, next_sentence_prediction_output):
+        next_sentence_prediction_labels = batch["labels"][..., 0]
+        next_sentence_prediction_loss = self.loss_fn(
+            next_sentence_prediction_output, next_sentence_prediction_labels
+        )
+        return next_sentence_prediction_loss
