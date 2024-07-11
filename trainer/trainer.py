@@ -33,7 +33,6 @@ class TrainerForPreTraining:
 
             # Masked language modeling loss
             masked_tokens = batch["masked_tokens"].bool()
-
             masked_token_predictions = masked_language_modeling_output[masked_tokens]
             masked_token_labels = batch["labels"][masked_tokens]
             masked_language_modeling_loss = self.loss_fn(masked_token_predictions, masked_token_labels)

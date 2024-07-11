@@ -13,15 +13,8 @@ class BertModelForPretraining(nn.Module):
         super().__init__()
         self.config: BertConfig = config
         self.bert = BertModel(config)
-        self.masked_language_modeling_head = nn.Sequential(
-            nn.Linear(config.d_model, config.vocab_size),
-            nn.Softmax(dim=-1)
-        )
-
-        self.next_sentence_prediction_head = nn.Sequential(
-            nn.Linear(config.d_model, 2),
-            nn.Softmax(dim=-1)
-        )
+        self.masked_language_modeling_head = nn.Linear(config.d_model, config.vocab_size)
+        self.next_sentence_prediction_head = nn.Linear(config.d_model, 2)
 
     def forward(
         self,

@@ -31,7 +31,6 @@ class MaskedLanguageModelingDataProcessor:
         ]
 
         assert self.p_replacement_mask + self.p_replacement_random + self.p_replacement_unchanged == 1
-        # self.num_mask_tokens = round(context_length * p_mask)
 
         def is_power_of_2(number: int):
             exponent = math.log2(number)
