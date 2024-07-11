@@ -37,15 +37,16 @@ class BertDataset:
 
     @staticmethod
     def load(num_samples: int, context_length: int, verbose: bool = True):
-        tokenizer = get_tokenizer()
+
+        if not verbose:
+            disable_progress_bars()
+
         try:
             dataset = get_dataset(split_by_context_length=True, context_length=context_length)
         except FileNotFoundError or ValueError:
             raise Exception(f"Please run BertDataset.prepare(context_length={context_length}) first.")
 
-        if not verbose:
-            disable_progress_bars()
-
+        tokenizer = get_tokenizer()
         nsp_data_collator = NextSentencePredictionDataProcessor(
             tokenizer=tokenizer
         )
