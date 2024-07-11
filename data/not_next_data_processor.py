@@ -33,8 +33,9 @@ class NotNextDataProcessor:
         self.num_not_possible = 0
         self.num_batches = 0
 
-    def __call__(self, context_length: int = 128):
-        print("not next splitting fails <=40% of the time -> make sure to generate enough samples!")
+    def __call__(self, context_length: int = 128, verbose: bool = True):
+        if verbose:
+            print("not next splitting fails <=40% of the time -> make sure to generate enough samples!")
         batch_size = 2
         assert batch_size == 2
         dataset = self.dataset.map(

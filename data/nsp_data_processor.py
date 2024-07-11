@@ -14,7 +14,7 @@ class NextSentencePredictionDataProcessor:
         self.sep_token_id = tokenizer.sep_token_id
         self.pad_token_id = tokenizer.pad_token_id
 
-    def __call__(self, dataset: Dataset, num_samples: int, context_length: int = 128):
+    def __call__(self, dataset: Dataset, num_samples: int, context_length: int = 128, verbose: bool = True):
         num_samples_per_type = num_samples // 2
         k_is_next = num_samples_per_type
         not_next_failure_rate = 0.35
@@ -38,7 +38,7 @@ class NextSentencePredictionDataProcessor:
         split_not_next = NotNextDataProcessor(
             tokenizer=self.tokenizer, dataset=dataset.select(random_indices[k_is_next:])
         )
-        not_next_dataset = split_not_next(context_length=context_length).select(range(num_samples_per_type))
+        not_next_dataset = split_not_next(context_length=context_length, verbose=verbose).select(range(num_samples_per_type))
         not_next_dataset = self.add_labels_and_special_tokens_mask(not_next_dataset, label=0)
 
         if split_not_next.num_batches > 0:

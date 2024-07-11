@@ -18,7 +18,7 @@ class TrainerForPreTraining:
 
     def train(self, training_steps: int, context_length: int = 128):
         num_training_samples = self.training_args.batch_size * training_steps
-        dataset = BertDataset.load(num_samples=num_training_samples, context_length=context_length)
+        dataset = BertDataset.load(num_samples=num_training_samples, context_length=context_length, verbose=False)
         assert num_training_samples <= len(dataset), "Not enough samples in dataset for training steps"
         dataset = dataset.iter(batch_size=self.training_args.batch_size)
 
