@@ -4,12 +4,12 @@ from trainer.arguments import TrainingArguments
 from data.bert_dataset import BertDataset
 
 
-class Trainer:
+class TrainerForPreTraining:
     def __init__(self, model: nn.Module, training_args: TrainingArguments):
         self.training_args = training_args
         self.model = model
 
-        self.loss = nn.CrossEntropyLoss()
+        self.loss_fn = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(
             self.model.parameters(),
             lr=self.training_args.learning_rate,
@@ -29,14 +29,22 @@ class Trainer:
         for batch in dataset:
             self.optimizer.zero_grad()
 
-            outputs = self.model(**batch)
+            masked_language_modeling_output, next_sentence_prediction_output = self.model(**batch)
 
-            masked_token_mask = batch["masked_tokens"].bool()
+            # Masked language modeling loss
+            masked_tokens = batch["masked_tokens"].bool()
 
-            predictions = outputs[masked_token_mask]
-            labels = batch["labels"][masked_token_mask]
+            masked_token_predictions = masked_language_modeling_output[masked_tokens]
+            masked_token_labels = batch["labels"][masked_tokens]
+            masked_language_modeling_loss = self.loss_fn(masked_token_predictions, masked_token_labels)
 
-            loss = self.loss(predictions, labels)
+            # Next sentence prediction loss
+            next_sentence_prediction_labels = batch["labels"][..., 0]
+            next_sentence_prediction_loss = self.loss_fn(
+                next_sentence_prediction_output, next_sentence_prediction_labels
+            )
+
+            loss = masked_language_modeling_loss + next_sentence_prediction_loss
             loss.backward()
             self.optimizer.step()
 
@@ -44,8 +52,11 @@ class Trainer:
                 running_loss = loss.item()
             else:
                 running_loss = 0.5 * loss.item() + 0.5 * running_loss
-            progress_bar.set_description(f"Training (loss: {running_loss: .4f})")
+            progress_bar.set_description(
+                f"MLM loss: {masked_language_modeling_loss: .4f} - NSP loss: {next_sentence_prediction_loss: .4f}"
+            )
+            # progress_bar.set_description(f"Training (loss: {running_loss: .4f})")
             progress_bar.update(1)
 
-        progress_bar.set_description(f"Avg loss: {running_loss: .4f})")
+        # progress_bar.set_description(f"Avg loss: {running_loss: .4f})")
         progress_bar.close()

@@ -5,6 +5,8 @@ from data.util import get_dataset, get_tokenizer, save_dataset
 
 
 class BertDataset:
+    # TODO: give option that both sentences for nsp are not actual sentences but just spans of contiguous text
+    # TODO: compare performance
 
     @staticmethod
     def prepare(context_length: int):

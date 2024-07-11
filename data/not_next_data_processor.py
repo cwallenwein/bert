@@ -48,28 +48,8 @@ class NotNextDataProcessor:
             drop_last_batch=True
         ).with_format(
             "torch"
-        ).map(
-            self.add_labels_and_special_tokens_mask,
-            batched=True
         )
         return dataset
-
-    def add_labels_and_special_tokens_mask(self, batch):
-        batch = self.add_labels(batch, 0)
-        batch = self.add_special_tokens_mask(batch)
-        return batch
-
-    @staticmethod
-    def add_labels(batch, label):
-        batch["labels"] = batch["input_ids"].clone()
-        batch["labels"][:, 0] = label
-        return batch
-
-    def add_special_tokens_mask(self, batch: dict):
-        batch["special_tokens"] = torch.zeros_like(batch["input_ids"])
-        batch["special_tokens"][batch["input_ids"] == self.cls_token_id] = 1
-        batch["special_tokens"][batch["input_ids"] == self.sep_token_id] = 1
-        return batch
 
     def split_not_next(self, input_ids, context_length: int = 128):
         self.num_batches += 1

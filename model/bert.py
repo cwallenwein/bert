@@ -7,19 +7,50 @@ from model.attention import MultiHeadAttentionFromScratch
 from jaxtyping import Float
 from torch import Tensor
 
-# TODO: weight initialization
+
+class BertModelForPretraining(nn.Module):
+    def __init__(self, config: BertConfig):
+        super().__init__()
+        self.config: BertConfig = config
+        self.bert = BertModel(config)
+        self.masked_language_modeling_head = nn.Sequential(
+            nn.Linear(config.d_model, config.vocab_size),
+            nn.Softmax(dim=-1)
+        )
+
+        self.next_sentence_prediction_head = nn.Sequential(
+            nn.Linear(config.d_model, 2),
+            nn.Softmax(dim=-1)
+        )
+
+    def forward(
+        self,
+        input_ids: Float[Tensor, "batch sequence_length"],
+        token_type_ids: Float[Tensor, "batch sequence_length"],
+        attention_mask: Float[Tensor, "batch sequence_length"],
+        **kwargs
+    ):
+        bert_output = self.bert(
+            input_ids=input_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask
+        )
+        mlm_output = self.masked_language_modeling_head(bert_output)
+        nsp_output = self.next_sentence_prediction_head(bert_output[..., 0, :])
+        return mlm_output, nsp_output
+
+
 class BertModel(nn.Module):
+    # TODO: weight initialization
     config: BertConfig
 
     def __init__(self, config: BertConfig):
         super().__init__()
         self.config: BertConfig = config
 
-        self.bert = nn.ModuleList([
+        self.encoder = nn.ModuleList([
             BertEncoderLayer(config) for _ in range(config.n_layers)
         ])
-
-        self.head = nn.Linear(config.d_model, config.vocab_size)
 
         self.token_embedding_matrix = nn.Embedding(
             num_embeddings=config.vocab_size,
@@ -53,10 +84,8 @@ class BertModel(nn.Module):
 
         x = token_embeddings + segment_embeddings + position_embeddings
 
-        for layer in self.bert:
+        for layer in self.encoder:
             x = layer(x, attention_mask=attention_mask)
-
-        x = self.head(x)
 
         return x
 

@@ -1,5 +1,5 @@
 import argparse
-from trainer import Trainer
+from trainer import TrainerForPreTraining
 from trainer.arguments import TrainingArguments
 from model import BertModel, BertConfig
 
@@ -8,7 +8,7 @@ def train(args):
     config = BertConfig.from_dict(args)
     model = BertModel(config)
     training_args = TrainingArguments.from_dict(args)
-    trainer = Trainer(model, training_args)
+    trainer = TrainerForPreTraining(model, training_args)
 
     if args["context_length"] is not None and args["training_steps"] is not None:
         context_length = args["context_length"]
