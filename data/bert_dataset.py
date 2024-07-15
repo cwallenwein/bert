@@ -11,15 +11,19 @@ class BertDataset:
 
     @staticmethod
     def prepare(context_length: int, verbose: bool = True):
+        if verbose:
+            enable_progress_bars()
+        else:
+            disable_progress_bars()
+
         try:
             get_dataset(split_by_context_length=True, context_length=context_length)
+            enable_progress_bars()
             return True
         except FileNotFoundError or ValueError:
             try:
                 dataset = get_dataset(raw=True)
                 tokenizer = get_tokenizer()
-                if not verbose:
-                    disable_progress_bars()
                 context_length_splitter = ContextLengthSplitter(tokenizer=tokenizer)
                 dataset = context_length_splitter(
                     dataset=dataset,
@@ -38,7 +42,9 @@ class BertDataset:
     @staticmethod
     def load(num_samples: int, context_length: int, verbose: bool = True):
 
-        if not verbose:
+        if verbose:
+            enable_progress_bars()
+        else:
             disable_progress_bars()
 
         try:
