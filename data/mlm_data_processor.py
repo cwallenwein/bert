@@ -24,7 +24,7 @@ class MaskedLanguageModelingDataProcessor:
         self,
         dataset: Dataset,
         context_length: int = 128,
-        batch_size: int = 4,
+        batch_size: int = 1_000,
     ):
         assert sorted(dataset.column_names) == [
             "attention_mask", "input_ids", "labels", "special_tokens", "token_type_ids"

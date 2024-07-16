@@ -22,12 +22,12 @@ class TrainerForPreTraining:
     def train(
         self,
         training_steps: int,
+        dataset_name: str,
+        experiment_name: str,
         context_length: int = 128,
-        resume_training: bool = False,
-        save_training: bool = True
     ):
         num_training_samples = self.training_args.batch_size * training_steps
-        dataset = BertDataset.load(num_samples=num_training_samples, context_length=context_length, verbose=self.verbose)
+        dataset = BertDataset.load(preprocessed_name=dataset_name, context_length=context_length, verbose=self.verbose)
         assert num_training_samples <= len(dataset), "Not enough samples in dataset for training steps"
         dataset = dataset.iter(batch_size=self.training_args.batch_size)
 
@@ -36,8 +36,10 @@ class TrainerForPreTraining:
         running_total_loss = None
         running_mlm_loss = None
         running_nsp_loss = None
-        progress_bar = tqdm(dataset, total=training_steps, desc="Training", unit=" batches")
-        for batch in dataset:
+
+        progress_bar = tqdm(dataset, total=training_steps, desc="Training", unit=" steps")
+        for step in range(training_steps):
+            batch = next(dataset)
             self.optimizer.zero_grad()
 
             masked_language_modeling_output, next_sentence_prediction_output = self.model(**batch)
@@ -69,8 +71,8 @@ class TrainerForPreTraining:
             f"Avg loss: {running_total_loss: .4f} (MLM: {running_mlm_loss: .4f}, NSP: {running_nsp_loss: .4f})")
         progress_bar.close()
 
-        if save_training:
-            self.save_training_state()
+        if self.training_args.save_model_after_training:
+            self.save_checkpoint(experiment_name, step=training_steps)
 
     def calculate_masked_language_modeling_loss(self, batch, masked_language_modeling_output):
         masked_tokens = batch["masked_tokens"].bool()
@@ -86,12 +88,15 @@ class TrainerForPreTraining:
         )
         return next_sentence_prediction_loss
 
-    def save_training_state(self):
-        save_path = Path(__file__).parent.parent / "experiments" / "test.pt"
-        print(save_path)
+    def save_checkpoint(self, experiment_name: str, step: int):
+        experiment_path = Path(__file__).parent.parent / "experiments" / experiment_name
+        experiment_path.mkdir(exist_ok=True, parents=True)
+        checkpoint_path = experiment_path / "checkpoint.pt"
         torch.save({
             "model_state_dict": self.model.state_dict(),
-            "optimizer_state_dict": self.optimizer.state_dict()
-        }, save_path)
-        print(f"Saved training state to {save_path}")
+            "optimizer_state_dict": self.optimizer.state_dict(),
+            "step": step,
+            "batch_size": self.training_args.batch_size
+        }, checkpoint_path)
+        print(f"Saved training state to {checkpoint_path}")
 
