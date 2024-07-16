@@ -9,7 +9,15 @@ from data.bert_dataset import BertDataset
 class TrainerForPreTraining:
     def __init__(self, model: nn.Module, training_args: TrainingArguments, verbose: bool = True):
         self.training_args = training_args
-        self.model = model
+
+        if training_args.device == "mps":
+            self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        elif training_args.device == "cuda":
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            self.device = "cpu"
+
+        self.model = model.to(self.device)
 
         self.loss_fn = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(
@@ -28,6 +36,7 @@ class TrainerForPreTraining:
     ):
         num_training_samples = self.training_args.batch_size * training_steps
         dataset = BertDataset.load(preprocessed_name=dataset_name, context_length=context_length, verbose=self.verbose)
+        dataset.set_format("torch", device=self.device)
         assert num_training_samples <= len(dataset), "Not enough samples in dataset for training steps"
         dataset = dataset.iter(batch_size=self.training_args.batch_size)
 

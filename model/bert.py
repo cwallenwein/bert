@@ -69,7 +69,7 @@ class BertModel(nn.Module):
     ):
         segment_ids = token_type_ids
         context_length = input_ids.size(1)
-        token_position = torch.arange(context_length)
+        token_position = torch.arange(context_length, device=input_ids.device)
 
         token_embeddings = self.token_embedding_matrix(input_ids)
         segment_embeddings = self.segment_embedding_matrix(segment_ids)
