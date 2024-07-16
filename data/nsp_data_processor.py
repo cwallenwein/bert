@@ -14,7 +14,11 @@ class NextSentencePredictionDataProcessor:
         self.sep_token_id = tokenizer.sep_token_id
         self.pad_token_id = tokenizer.pad_token_id
 
-    def __call__(self, dataset: Dataset, num_samples: int, context_length: int = 128, verbose: bool = True):
+    def __call__(
+        self, dataset: Dataset, num_samples: int, context_length: int = 128, verbose: bool = True
+    ):
+
+        assert num_samples % 2 == 0
         num_samples_per_type = num_samples // 2
         k_is_next = num_samples_per_type
         not_next_failure_rate = 0.35
@@ -29,24 +33,50 @@ class NextSentencePredictionDataProcessor:
             # sample with replacement
             random_indices = random.choices(range(len(dataset)), k=k)
 
-        split_next = IsNextDataProcessor(
-            tokenizer=self.tokenizer, dataset=dataset.select(random_indices[:k_is_next])
+        is_next_subset = self.process_is_next_subset(
+            dataset,
+            indices=random_indices[:k_is_next],
+            num_samples=num_samples_per_type,
+            context_length=context_length,
         )
-        is_next_dataset = split_next(context_length=context_length)
-        is_next_dataset = self.add_labels_and_special_tokens_mask(is_next_dataset, label=1)
+        not_next_subset = self.process_not_next_subset(
+            dataset,
+            indices=random_indices[k_is_next:],
+            num_samples=num_samples_per_type,
+            context_length=context_length,
+            verbose=verbose
+        )
 
+        dataset = concatenate_datasets([is_next_subset, not_next_subset]).shuffle()
+        assert len(dataset) == num_samples, f"{len(dataset)} != {num_samples}"
+        return dataset
+
+    def process_not_next_subset(self, dataset, indices, num_samples: int, context_length: int, verbose: bool = True):
         split_not_next = NotNextDataProcessor(
-            tokenizer=self.tokenizer, dataset=dataset.select(random_indices[k_is_next:])
+            tokenizer=self.tokenizer, dataset=dataset.select(indices)
         )
-        not_next_dataset = split_not_next(context_length=context_length, verbose=verbose).select(range(num_samples_per_type))
+        not_next_dataset = split_not_next(context_length=context_length, verbose=verbose)
+        if len(not_next_dataset) >= num_samples:
+            not_next_dataset = not_next_dataset.select(range(num_samples))
+        else:
+            raise Exception("Not enough samples after not next splitting")
         not_next_dataset = self.add_labels_and_special_tokens_mask(not_next_dataset, label=0)
 
         if split_not_next.num_batches > 0:
             print(split_not_next.num_not_possible / split_not_next.num_batches)
 
-        dataset = concatenate_datasets([is_next_dataset, not_next_dataset]).shuffle()
-        assert len(dataset) == num_samples
-        return dataset
+        assert len(not_next_dataset) == num_samples, f"{len(not_next_dataset)} != {num_samples}"
+        return not_next_dataset
+
+    def process_is_next_subset(self, dataset, indices, num_samples: int, context_length: int):
+        split_next = IsNextDataProcessor(
+            tokenizer=self.tokenizer, dataset=dataset.select(indices)
+        )
+        is_next_dataset = split_next(context_length=context_length)
+        assert len(is_next_dataset) == num_samples, f"{len(is_next_dataset)} != {num_samples}"
+        is_next_dataset = self.add_labels_and_special_tokens_mask(is_next_dataset, label=1)
+        assert len(is_next_dataset) == num_samples, f"{len(is_next_dataset)} != {num_samples}"
+        return is_next_dataset
 
     def add_labels_and_special_tokens_mask(self, dataset: Dataset, label: int):
         return dataset.map(

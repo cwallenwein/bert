@@ -5,7 +5,7 @@ from data.bert_dataset import BertDataset
 
 
 def prepare_dataset(context_length: int = 128):
-    return BertDataset.prepare(context_length)
+    return BertDataset.split_into_context_length(context_length)
 
 
 parser = argparse.ArgumentParser(description="Prepare dataset")
