@@ -60,6 +60,8 @@ class BertModel(nn.Module):
             embedding_dim=config.d_model
         )
 
+        self.embedding_dropout = nn.Dropout(config.p_embedding_dropout)
+
     def forward(
         self,
         input_ids: Float[Tensor, "batch sequence_length"],
@@ -76,6 +78,7 @@ class BertModel(nn.Module):
         position_embeddings = self.position_embedding_matrix(token_position)
 
         x = token_embeddings + segment_embeddings + position_embeddings
+        x = self.embedding_dropout(x)
 
         for layer in self.encoder:
             x = layer(x, attention_mask=attention_mask)
@@ -98,12 +101,6 @@ class BertEncoderLayer(nn.Module):
             "gelu": nn.GELU
         }
 
-        self.layer_norm1 = nn.LayerNorm(
-            normalized_shape=config.d_model
-        )
-        self.layer_norm2 = nn.LayerNorm(
-            normalized_shape=config.d_model
-        )
         self.feed_forward = nn.Sequential(
             nn.Linear(config.d_model, config.feed_forward_intermediate_size),
             activations[config.feed_forward_activation](),
@@ -111,14 +108,28 @@ class BertEncoderLayer(nn.Module):
         )
         self.multi_head_attention = MultiHeadAttentionFromScratch(config)
 
+        self.layer_norm1 = nn.LayerNorm(
+            normalized_shape=config.d_model
+        )
+        self.layer_norm2 = nn.LayerNorm(
+            normalized_shape=config.d_model
+        )
+
+        self.feed_forward_dropout = nn.Dropout(config.p_feed_forward_dropout)
+        self.attention_dropout = nn.Dropout(config.p_attention_dropout)
+
     def forward(
         self,
         x: Float[Tensor, "batch seq_len d_model"],
         attention_mask: Float[Tensor, "batch seq_len"]
     ):
         attention_mask = attention_mask.bool()
-        x = x + self.multi_head_attention(x, attention_mask=attention_mask)[0]
+        x = x + self.attention_dropout(
+            self.multi_head_attention(x, attention_mask=attention_mask)[0]
+        )
         x = self.layer_norm1(x)
-        x = x + self.feed_forward(x)
+        x = x + self.feed_forward_dropout(
+            self.feed_forward(x)
+        )
         x = self.layer_norm2(x)
         return x

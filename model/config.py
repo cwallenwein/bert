@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+from transformers import BertConfig as HuggingfaceBertConfig
 
 
 @dataclass
@@ -12,10 +13,11 @@ class BertConfig:
     vocab_size: int = 30522
     n_segments: int = 2
     initializer_range: float = 0.02
-    attention_dropout: float = 0.1
-    feed_forward_dropout: float = 0.1
     feed_forward_activation: str = "gelu"
     feed_forward_intermediate_size: int = 512
+    p_embedding_dropout: float = 0.1
+    p_attention_dropout: float = 0.1
+    p_feed_forward_dropout: float = 0.1
 
     def __post_init__(self):
         self.d_head = self.d_model // self.n_heads
@@ -31,25 +33,14 @@ class BertConfig:
                 vocab_size=config["vocab_size"],
                 n_segments=config["type_vocab_size"],
                 initializer_range=config["initializer_range"],
-                attention_dropout=config["attention_probs_dropout_prob"],
-                feed_forward_dropout=config["hidden_dropout_prob"],
+                p_attention_dropout=config["attention_probs_dropout_prob"],
+                p_feed_forward_dropout=config["hidden_dropout_prob"],
                 feed_forward_activation=config["hidden_act"],
                 feed_forward_intermediate_size=config["intermediate_size"],
             )
         else:
-            return BertConfig(
-                d_model=config["d_model"],
-                n_layers=config["n_layers"],
-                n_heads=config["n_heads"],
-                context_length=config["context_length"],
-                vocab_size=config["vocab_size"],
-                n_segments=config["n_segments"],
-                initializer_range=config["initializer_range"],
-                attention_dropout=config["attention_dropout"],
-                feed_forward_dropout=config["feed_forward_dropout"],
-                feed_forward_activation=config["feed_forward_activation"],
-                feed_forward_intermediate_size=config["feed_forward_intermediate_size"],
-            )
+            field_names = {field.name for field in fields(cls)}
+            return BertConfig(**{key: value for key, value in config.items() if key in field_names})
 
     @classmethod
     def from_json(cls, filename, pretrained_tensorflow: bool = False):
@@ -57,3 +48,19 @@ class BertConfig:
         with open(path, "r") as f:
             config = json.load(f)
             return BertConfig.from_dict(config, pretrained_tensorflow=pretrained_tensorflow)
+
+    @classmethod
+    def from_huggingface_config(cls, config: HuggingfaceBertConfig):
+        return BertConfig(
+            d_model=config.hidden_size,
+            n_layers=config.num_hidden_layers,
+            n_heads=config.num_attention_heads,
+            context_length=config.max_position_embeddings,
+            vocab_size=config.vocab_size,
+            n_segments=config.type_vocab_size,
+            initializer_range=config.initializer_range,
+            p_attention_dropout=config.attention_probs_dropout_prob,
+            p_feed_forward_dropout=config.hidden_dropout_prob,
+            feed_forward_activation=config.hidden_act,
+            feed_forward_intermediate_size=config.intermediate_size,
+        )
