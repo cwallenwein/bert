@@ -10,3 +10,4 @@ nltk
 einops
 jaxtyping
 seaborn
+torchmetrics

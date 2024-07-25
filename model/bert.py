@@ -14,7 +14,7 @@ class BertModelForPretraining(nn.Module):
         self.config: BertConfig = config
         self.bert = BertModel(config)
         self.masked_language_modeling_head = nn.Linear(config.d_model, config.vocab_size)
-        self.next_sentence_prediction_head = nn.Linear(config.d_model, 2)
+        self.next_sentence_prediction_head = nn.Linear(config.d_model, 1)
 
     def forward(
         self,
@@ -29,7 +29,10 @@ class BertModelForPretraining(nn.Module):
             attention_mask=attention_mask
         )
         mlm_output = self.masked_language_modeling_head(bert_output)
-        nsp_output = self.next_sentence_prediction_head(bert_output[..., 0, :])
+        nsp_output = self.next_sentence_prediction_head(
+            bert_output[..., 0, :]
+        ).squeeze(-1)
+        # print(nsp_output.shape)
         return mlm_output, nsp_output
 
 
@@ -40,27 +43,10 @@ class BertModel(nn.Module):
     def __init__(self, config: BertConfig):
         super().__init__()
         self.config: BertConfig = config
-
+        self.embedding = BertEmbedding(config)
         self.encoder = nn.ModuleList([
             BertEncoderLayer(config) for _ in range(config.n_layers)
         ])
-
-        self.token_embedding_matrix = nn.Embedding(
-            num_embeddings=config.vocab_size,
-            embedding_dim=config.d_model
-        )
-
-        self.position_embedding_matrix = nn.Embedding(
-            num_embeddings=config.context_length,
-            embedding_dim=config.d_model
-        )
-
-        self.segment_embedding_matrix = nn.Embedding(
-            num_embeddings=config.n_segments,
-            embedding_dim=config.d_model
-        )
-
-        self.embedding_dropout = nn.Dropout(config.p_embedding_dropout)
 
     def forward(
         self,
@@ -69,16 +55,11 @@ class BertModel(nn.Module):
         attention_mask: Float[Tensor, "batch sequence_length"],
         **kwargs
     ):
-        segment_ids = token_type_ids
-        context_length = input_ids.size(1)
-        token_position = torch.arange(context_length, device=input_ids.device)
 
-        token_embeddings = self.token_embedding_matrix(input_ids)
-        segment_embeddings = self.segment_embedding_matrix(segment_ids)
-        position_embeddings = self.position_embedding_matrix(token_position)
-
-        x = token_embeddings + segment_embeddings + position_embeddings
-        x = self.embedding_dropout(x)
+        x = self.embedding(
+            input_ids=input_ids,
+            segment_ids=token_type_ids
+        )
 
         for layer in self.encoder:
             x = layer(x, attention_mask=attention_mask)
@@ -132,4 +113,44 @@ class BertEncoderLayer(nn.Module):
             self.feed_forward(x)
         )
         x = self.layer_norm2(x)
+        return x
+
+
+class BertEmbedding(nn.Module):
+
+    def __init__(self, config: BertConfig):
+        super().__init__()
+        self.token_embedding_matrix = nn.Embedding(
+            num_embeddings=config.vocab_size,
+            embedding_dim=config.d_model
+        )
+
+        self.position_embedding_matrix = nn.Embedding(
+            num_embeddings=config.context_length,
+            embedding_dim=config.d_model
+        )
+
+        self.segment_embedding_matrix = nn.Embedding(
+            num_embeddings=config.n_segments,
+            embedding_dim=config.d_model
+        )
+
+        self.layer_norm = nn.LayerNorm(config.d_model)
+        self.embedding_dropout = nn.Dropout(config.p_embedding_dropout)
+
+    def forward(
+        self,
+        input_ids: Float[Tensor, "batch sequence_length"],
+        segment_ids: Float[Tensor, "batch sequence_length"],
+    ):
+        context_length = input_ids.size(1)
+        token_position = torch.arange(context_length, device=input_ids.device)
+
+        token_embeddings = self.token_embedding_matrix(input_ids)
+        segment_embeddings = self.segment_embedding_matrix(segment_ids)
+        position_embeddings = self.position_embedding_matrix(token_position)
+
+        x = token_embeddings + segment_embeddings + position_embeddings
+        x = self.layer_norm(x)
+        x = self.embedding_dropout(x)
         return x

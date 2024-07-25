@@ -91,7 +91,7 @@ class NextSentencePredictionDataProcessor:
         return batch
 
     def add_special_tokens_mask(self, batch: dict):
-        batch["special_tokens"] = torch.zeros_like(batch["input_ids"])
+        batch["special_tokens"] = torch.zeros_like(batch["input_ids"], dtype=torch.bool)
         batch["special_tokens"][batch["input_ids"] == self.cls_token_id] = 1
         batch["special_tokens"][batch["input_ids"] == self.sep_token_id] = 1
         batch["special_tokens"][batch["input_ids"] == self.pad_token_id] = 1
