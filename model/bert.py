@@ -3,6 +3,7 @@ from torch import nn
 from model.config import BertConfig
 from model.attention import MultiHeadAttentionBuilder
 from model.util import init_xavier
+from model.gated_linear_unit import GatedLinearUnit2
 
 # Typehints
 from jaxtyping import Float
@@ -77,11 +78,18 @@ class BertEncoderLayer(nn.Module):
             "gelu": nn.GELU
         }
 
-        self.feed_forward = nn.Sequential(
-            nn.Linear(config.d_model, config.feed_forward_intermediate_size),
-            activations[config.feed_forward_activation](),
-            nn.Linear(config.feed_forward_intermediate_size, config.d_model),
-        )
+        if config.feed_forward_activation in activations.keys():
+            self.feed_forward = nn.Sequential(
+                nn.Linear(config.d_model, config.feed_forward_intermediate_size),
+                activations[config.feed_forward_activation](),
+                nn.Linear(config.feed_forward_intermediate_size, config.d_model),
+            )
+        elif config.feed_forward_activation == "glu":
+            self.feed_forward = nn.Sequential(
+                nn.Linear(config.d_model, config.feed_forward_intermediate_size),
+                GatedLinearUnit2(),
+                nn.Linear(config.feed_forward_intermediate_size // 2, config.d_model),
+            )
         self.multi_head_attention = MultiHeadAttentionBuilder(config).build()
 
         self.layer_norm1 = nn.LayerNorm(
