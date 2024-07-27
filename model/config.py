@@ -18,9 +18,11 @@ class BertConfig:
     p_embedding_dropout: float = 0.1
     p_attention_dropout: float = 0.1
     p_feed_forward_dropout: float = 0.1
+    multi_head_attention_implementation: str = "pytorch"
 
     def __post_init__(self):
         self.d_head = self.d_model // self.n_heads
+        assert self.multi_head_attention_implementation in ["default", "pytorch", "from_scratch"]
 
     @classmethod
     def from_dict(cls, config: dict, pretrained_tensorflow: bool = False):

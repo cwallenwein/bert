@@ -1,7 +1,8 @@
 import torch
 from torch import nn
 from model.config import BertConfig
-from model.attention import MultiHeadAttentionFromScratch
+from model.attention import MultiHeadAttentionBuilder
+from model.util import init_xavier
 
 # Typehints
 from jaxtyping import Float
@@ -9,6 +10,7 @@ from torch import Tensor
 
 
 class BertModelForPretraining(nn.Module):
+    # TODO: add an option for weight tying to the config
     def __init__(self, config: BertConfig):
         super().__init__()
         self.config: BertConfig = config
@@ -32,12 +34,10 @@ class BertModelForPretraining(nn.Module):
         nsp_output = self.next_sentence_prediction_head(
             bert_output[..., 0, :]
         ).squeeze(-1)
-        # print(nsp_output.shape)
         return mlm_output, nsp_output
 
 
 class BertModel(nn.Module):
-    # TODO: weight initialization
     config: BertConfig
 
     def __init__(self, config: BertConfig):
@@ -66,11 +66,6 @@ class BertModel(nn.Module):
 
         return x
 
-    def initialize_weights(self):
-        for module in self.modules():
-            if isinstance(module, nn.Parameter):
-                nn.init.xavier_normal_(module)
-
 
 class BertEncoderLayer(nn.Module):
     def __init__(self, config: BertConfig):
@@ -87,7 +82,7 @@ class BertEncoderLayer(nn.Module):
             activations[config.feed_forward_activation](),
             nn.Linear(config.feed_forward_intermediate_size, config.d_model),
         )
-        self.multi_head_attention = MultiHeadAttentionFromScratch(config)
+        self.multi_head_attention = MultiHeadAttentionBuilder(config).build()
 
         self.layer_norm1 = nn.LayerNorm(
             normalized_shape=config.d_model
@@ -98,6 +93,7 @@ class BertEncoderLayer(nn.Module):
 
         self.feed_forward_dropout = nn.Dropout(config.p_feed_forward_dropout)
         self.attention_dropout = nn.Dropout(config.p_attention_dropout)
+        self._init_weights()
 
     def forward(
         self,
@@ -106,7 +102,7 @@ class BertEncoderLayer(nn.Module):
     ):
         attention_mask = attention_mask.bool()
         x = x + self.attention_dropout(
-            self.multi_head_attention(x, attention_mask=attention_mask)[0]
+            self.multi_head_attention(x, attention_mask=attention_mask)
         )
         x = self.layer_norm1(x)
         x = x + self.feed_forward_dropout(
@@ -114,6 +110,9 @@ class BertEncoderLayer(nn.Module):
         )
         x = self.layer_norm2(x)
         return x
+
+    def _init_weights(self):
+        init_xavier(sequential=self.feed_forward)
 
 
 class BertEmbedding(nn.Module):
@@ -138,6 +137,8 @@ class BertEmbedding(nn.Module):
         self.layer_norm = nn.LayerNorm(config.d_model)
         self.embedding_dropout = nn.Dropout(config.p_embedding_dropout)
 
+        self._init_weights()
+
     def forward(
         self,
         input_ids: Float[Tensor, "batch sequence_length"],
@@ -154,3 +155,8 @@ class BertEmbedding(nn.Module):
         x = self.layer_norm(x)
         x = self.embedding_dropout(x)
         return x
+
+    def _init_weights(self):
+        init_xavier(embedding=self.token_embedding_matrix)
+        init_xavier(embedding=self.segment_embedding_matrix)
+        init_xavier(embedding=self.position_embedding_matrix)
