@@ -19,10 +19,12 @@ class BertConfig:
     p_attention_dropout: float = 0.1
     p_feed_forward_dropout: float = 0.1
     multi_head_attention_implementation: str = "pytorch"
+    positional_information_type: str = "learned"
 
     def __post_init__(self):
         self.d_head = self.d_model // self.n_heads
         assert self.multi_head_attention_implementation in ["default", "pytorch", "from_scratch"]
+        assert self.positional_information_type in ["learned", "sinusoidal", "scaled_sinusoidal"]
 
     @classmethod
     def from_dict(cls, config: dict, pretrained_tensorflow: bool = False):
