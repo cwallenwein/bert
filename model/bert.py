@@ -168,3 +168,50 @@ class BertEmbedding(nn.Module):
         init_xavier(embedding=self.token_embedding_matrix)
         init_xavier(embedding=self.segment_embedding_matrix)
         init_xavier(embedding=self.position_embedding_matrix)
+
+
+class SinusoidalPositionalEmbeddings(nn.Module):
+    """
+    Based on https://arxiv.org/pdf/1706.03762
+    """
+    def __init__(self, config: BertConfig):
+        super().__init__()
+        d_model = config.d_model
+        context_length = config.context_length
+        n = 10_000
+
+        self.positional_encoding = torch.zeros(context_length, d_model)
+
+        positions = torch.arange(context_length).unsqueeze(1)
+        frequencies = (
+            n ** torch.arange(d_model//2) / (d_model//2)
+        ).unsqueeze(0)
+
+        values = torch.div(positions, frequencies)
+
+        self.positional_encoding[:, 0::2] = torch.sin(values)
+        self.positional_encoding[:, 1::2] = torch.cos(values)
+
+    def forward(
+        self,
+        input_ids: Float[Tensor, "batch sequence_length"],
+    ):
+        seq_length = input_ids.size(1)
+        return self.positional_encoding[:seq_length, :]
+
+
+class ScaledSinusoidalPositionalEmbeddings(nn.Module):
+    """
+    Based on https://proceedings.mlr.press/v162/hua22a/hua22a.pdf
+    """
+    def __init__(self, config: BertConfig):
+        super().__init__()
+        self.scaling_factor = nn.Parameter(torch.ones(1))
+        self.sinusoidal_positional_embedding = SinusoidalPositionalEmbeddings(config)
+
+    def forward(
+        self,
+        input_ids: Float[Tensor, "batch sequence_length"],
+    ):
+        return self.scaling_factor * self.sinusoidal_positional_embedding(input_ids)
+
