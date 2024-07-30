@@ -109,33 +109,17 @@ class TrainerForPreTraining:
         batch_total_loss.backward()
         self.optimizer.step()
 
-        # self.total_tokens += self.count_tokens_in_batch(batch, get_tokenizer())
+        self.total_tokens += self.count_tokens_in_batch(batch, get_tokenizer())
 
         if with_wandb:
             wandb.log(batch_metrics)
         return batch_metrics["total_loss"]
 
     def count_tokens_in_batch(self, batch, tokenizer):
-        # Count this number before the training actually starts
-        if self.device == "mps":
-            return 0
-            # input_ids = batch["input_ids"]
-            # special_tokens_mask = torch.zeros_like(input_ids, dtype=torch.bool)
-            #
-            # # Create the special tokens mask manually
-            # for special_id in tokenizer.all_special_ids:
-            #     special_tokens_mask |= (input_ids == special_id)
-            #
-            # # Invert the mask to get non-special tokens
-            # not_special_token_combined = ~special_tokens_mask
-            #
-            # # Count the number of non-special tokens
-            # return not_special_token_combined.sum().item()
-        else:
-            return (
-                ~torch.isin(batch["input_ids"], torch.tensor(tokenizer.all_special_ids))
-            ).sum().item()
-
+        # TODO: Count this number after the training
+        total_number_of_tokens = batch["input_ids"].numel()
+        number_of_pad_tokens = (batch["input_ids"] == tokenizer.pad_token_id).sum().item()
+        return total_number_of_tokens - number_of_pad_tokens
 
     def calculate_mlm_loss(
         self,
