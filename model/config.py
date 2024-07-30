@@ -22,9 +22,11 @@ class BertConfig:
     multi_head_attention_implementation: str = "pytorch"
     positional_information_type: str = "learned"
     attention_bias: bool = True
+    layer_norm: str = "pre"
 
     def __post_init__(self):
         self.d_head = self.d_model // self.n_heads
+        assert self.layer_norm in ["pre", "post"]
         assert self.feed_forward_activation in ["relu", "gelu", "glu"]
         assert self.multi_head_attention_implementation in ["default", "pytorch"]
         assert self.positional_information_type in ["learned", "sinusoidal", "scaled_sinusoidal"]

@@ -109,14 +109,26 @@ class BertEncoderLayer(nn.Module):
         attention_mask: Float[Tensor, "batch seq_len"]
     ):
         attention_mask = attention_mask.bool()
+
+        if self.config.layer_norm == "pre":
+            x = self.layer_norm1(x)
+
         x = x + self.attention_dropout(
             self.multi_head_attention(x, attention_mask=attention_mask)
         )
-        x = self.layer_norm1(x)
+
+        if self.config.layer_norm == "post":
+            x = self.layer_norm1(x)
+        elif self.config.layer_norm == "pre":
+            x = self.layer_norm2(x)
+
         x = x + self.feed_forward_dropout(
             self.feed_forward(x)
         )
-        x = self.layer_norm2(x)
+
+        if self.config.layer_norm == "post":
+            x = self.layer_norm2(x)
+
         return x
 
     def _init_weights(self):
