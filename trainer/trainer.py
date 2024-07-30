@@ -70,6 +70,8 @@ class TrainerForPreTraining:
             batch = next(dataset)
             total_loss = self.step(
                 batch,
+                step=step,
+                total_steps=training_steps,
                 with_nsp=with_nsp,
                 with_wandb=with_wandb
             )
@@ -83,9 +85,7 @@ class TrainerForPreTraining:
         if self.training_args.save_model_after_training:
             self.save_checkpoint(experiment_name, step=training_steps)
 
-    def step(self, batch, with_nsp: bool = True, with_wandb: bool = True):
-
-        self.optimizer.zero_grad()
+    def step(self, batch, step: int, total_steps: int, with_nsp: bool = True, with_wandb: bool = True):
 
         masked_language_modeling_output, next_sentence_prediction_output = self.model(**batch)
         batch_metrics = dict()
@@ -107,7 +107,13 @@ class TrainerForPreTraining:
             batch_metrics["nsp_acc"] = batch_nsp_acc
 
         batch_total_loss.backward()
-        self.optimizer.step()
+
+        # gradient accumulation
+        should_accumulate = (step + 1) % self.training_args.gradient_accumulation_steps == 0
+        last_step = step + 1 == total_steps
+        if should_accumulate or last_step:
+            self.optimizer.step()
+            self.optimizer.zero_grad()
 
         self.total_tokens += self.count_tokens_in_batch(batch, get_tokenizer())
 
@@ -115,7 +121,8 @@ class TrainerForPreTraining:
             wandb.log(batch_metrics)
         return batch_metrics["total_loss"]
 
-    def count_tokens_in_batch(self, batch, tokenizer):
+    @staticmethod
+    def count_tokens_in_batch(batch, tokenizer):
         # TODO: Count this number after the training
         total_number_of_tokens = batch["input_ids"].numel()
         number_of_pad_tokens = (batch["input_ids"] == tokenizer.pad_token_id).sum().item()

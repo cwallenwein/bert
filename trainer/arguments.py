@@ -9,6 +9,7 @@ class TrainingArguments:
     beta2: float = 0.999
     device: str = "mps"
     save_model_after_training: bool = True
+    gradient_accumulation_steps: int = 1
 
     @classmethod
     def from_dict(cls, arguments: dict):
