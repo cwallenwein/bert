@@ -15,6 +15,7 @@ class BertConfig:
     initializer_range: float = 0.02
     feed_forward_activation: str = "gelu"
     feed_forward_intermediate_size: int = 512
+    feed_forward_bias: bool = True
     p_embedding_dropout: float = 0.1
     p_attention_dropout: float = 0.1
     p_feed_forward_dropout: float = 0.1
@@ -24,6 +25,7 @@ class BertConfig:
 
     def __post_init__(self):
         self.d_head = self.d_model // self.n_heads
+        assert self.feed_forward_activation in ["relu", "gelu", "glu"]
         assert self.multi_head_attention_implementation in ["default", "pytorch"]
         assert self.positional_information_type in ["learned", "sinusoidal", "scaled_sinusoidal"]
 

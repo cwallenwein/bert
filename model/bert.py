@@ -80,15 +80,15 @@ class BertEncoderLayer(nn.Module):
 
         if config.feed_forward_activation in activations.keys():
             self.feed_forward = nn.Sequential(
-                nn.Linear(config.d_model, config.feed_forward_intermediate_size),
+                nn.Linear(config.d_model, config.feed_forward_intermediate_size, bias=config.feed_forward_bias),
                 activations[config.feed_forward_activation](),
-                nn.Linear(config.feed_forward_intermediate_size, config.d_model),
+                nn.Linear(config.feed_forward_intermediate_size, config.d_model, bias=config.feed_forward_bias),
             )
         elif config.feed_forward_activation == "glu":
             self.feed_forward = nn.Sequential(
-                nn.Linear(config.d_model, config.feed_forward_intermediate_size),
+                nn.Linear(config.d_model, config.feed_forward_intermediate_size, bias=config.feed_forward_bias),
                 GatedLinearUnit2(),
-                nn.Linear(config.feed_forward_intermediate_size // 2, config.d_model),
+                nn.Linear(config.feed_forward_intermediate_size // 2, config.d_model, bias=config.feed_forward_bias),
             )
         self.multi_head_attention = MultiHeadAttentionBuilder(config).build()
 
