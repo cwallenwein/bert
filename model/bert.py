@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from model.config import BertConfig
-from model.attention import MultiHeadAttentionBuilder
+from model.attention import MultiHeadAttentionBuilder, ScaledDotProductAttention
 from model.util import init_xavier
 from model.gated_linear_unit import GatedLinearUnit2
 
