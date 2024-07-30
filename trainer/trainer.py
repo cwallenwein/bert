@@ -6,6 +6,8 @@ from trainer.arguments import TrainingArguments
 from model import BertModelForPretraining
 from model.config import BertConfig
 from data.bert_dataset import BertDataset
+from data.save_and_load import get_tokenizer
+from functools import reduce
 import torchmetrics
 import wandb
 
@@ -19,7 +21,6 @@ class TrainerForPreTraining:
 
         self.masked_language_modeling_loss_function = nn.CrossEntropyLoss()
         self.next_sentence_prediction_loss_function = nn.BCEWithLogitsLoss()
-        self.initialize_wandb(model.config, training_args)
 
         self.optimizer = optim.Adam(
             self.model.parameters(),
@@ -45,10 +46,16 @@ class TrainerForPreTraining:
         dataset_name: str,
         experiment_name: str,
         context_length: int = 128,
-        with_next_sentence_prediction: bool = True
+        with_nsp: bool = True,
+        with_wandb: bool = True
     ):
+        # TODO: implement gradient accumulation by only applying loss.backward every x steps + dividing the loss by the number of accumulation steps to normalize them
+        # TODO: add micro and macro batch size - make sure that num_gpus * micro * gradient_accumulation_steps == macro_batch_size
         self.masked_language_modeling_accuracy.reset()
         self.next_sentence_prediction_accuracy.reset()
+        self.total_tokens = 0
+        if with_wandb:
+            self.initialize_wandb(self.model.config, self.training_args)
 
         num_training_samples = self.training_args.batch_size * training_steps
         dataset = BertDataset.load(preprocessed_name=dataset_name, context_length=context_length, verbose=self.verbose)
@@ -61,49 +68,76 @@ class TrainerForPreTraining:
         progress_bar = tqdm(dataset, total=training_steps, desc="Training", unit=" steps")
         for step in range(training_steps):
             batch = next(dataset)
-            total_loss = self.step(batch, with_next_sentence_prediction)
+            total_loss = self.step(
+                batch,
+                with_nsp=with_nsp,
+                with_wandb=with_wandb
+            )
             progress_bar.set_description(f"Training loss: {total_loss: .4f}")
             progress_bar.update(1)
 
         progress_bar.close()
-        wandb.finish()
+        if with_wandb:
+            wandb.finish()
 
         if self.training_args.save_model_after_training:
             self.save_checkpoint(experiment_name, step=training_steps)
 
-    def step(self, batch, with_next_sentence_prediction: bool = True):
+    def step(self, batch, with_nsp: bool = True, with_wandb: bool = True):
 
         self.optimizer.zero_grad()
 
         masked_language_modeling_output, next_sentence_prediction_output = self.model(**batch)
+        batch_metrics = dict()
 
-        masked_language_modeling_loss, masked_language_modeling_accuracy = self.calculate_masked_language_modeling_loss(
-            batch, masked_language_modeling_output
-        )
-        total_loss = masked_language_modeling_loss
+        batch_mlm_loss = self.calculate_mlm_loss(batch, masked_language_modeling_output)
+        batch_mlm_acc = self.calculate_mlm_acc(batch, masked_language_modeling_output)
 
-        if with_next_sentence_prediction:
-            next_sentence_prediction_loss, next_sentence_prediction_accuracy = self.calculate_next_sentence_prediction_loss(
-                batch, next_sentence_prediction_output
-            )
-            total_loss += next_sentence_prediction_loss
+        batch_total_loss = batch_mlm_loss
 
-        total_loss.backward()
+        batch_metrics["mlm_loss"] = batch_mlm_loss.item()
+        batch_metrics["mlm_acc"] = batch_mlm_acc
+
+        if with_nsp:
+            batch_nsp_loss = self.calculate_nsp_loss(batch, next_sentence_prediction_output)
+            batch_nsp_acc = self.calculate_nsp_acc(batch, next_sentence_prediction_output)
+            batch_total_loss += batch_nsp_loss
+            batch_metrics["total_loss"] = batch_total_loss.item()
+            batch_metrics["nsp_loss"] = batch_nsp_loss.item()
+            batch_metrics["nsp_acc"] = batch_nsp_acc
+
+        batch_total_loss.backward()
         self.optimizer.step()
 
-        metrics = dict()
+        # self.total_tokens += self.count_tokens_in_batch(batch, get_tokenizer())
 
-        metrics["mlm_loss"] = masked_language_modeling_loss.item()
-        metrics["mlm_acc"] = masked_language_modeling_accuracy
-        if with_next_sentence_prediction:
-            metrics["total_loss"] = total_loss.item()
-            metrics["nsp_loss"] = next_sentence_prediction_loss.item()
-            metrics["nsp_acc"] = next_sentence_prediction_accuracy
+        if with_wandb:
+            wandb.log(batch_metrics)
+        return batch_metrics["total_loss"]
 
-        wandb.log(metrics)
-        return total_loss.item()
+    def count_tokens_in_batch(self, batch, tokenizer):
+        # Count this number before the training actually starts
+        if self.device == "mps":
+            return 0
+            # input_ids = batch["input_ids"]
+            # special_tokens_mask = torch.zeros_like(input_ids, dtype=torch.bool)
+            #
+            # # Create the special tokens mask manually
+            # for special_id in tokenizer.all_special_ids:
+            #     special_tokens_mask |= (input_ids == special_id)
+            #
+            # # Invert the mask to get non-special tokens
+            # not_special_token_combined = ~special_tokens_mask
+            #
+            # # Count the number of non-special tokens
+            # return not_special_token_combined.sum().item()
+        else:
+            return (
+                ~torch.isin(batch["input_ids"], torch.tensor(tokenizer.all_special_ids))
+            ).sum().item()
 
-    def calculate_masked_language_modeling_loss(
+
+    def calculate_mlm_loss(
         self,
         batch,
         masked_language_modeling_output
@@ -113,32 +147,45 @@ class TrainerForPreTraining:
         masked_token_labels = batch["labels"][masked_tokens]
 
         # calculate loss
-        masked_language_modeling_loss = self.masked_language_modeling_loss_function(masked_token_predictions, masked_token_labels)
+        mlm_loss = self.masked_language_modeling_loss_function(masked_token_predictions, masked_token_labels)
+
+        return mlm_loss
+
+    def calculate_mlm_acc(self, batch, masked_language_modeling_output):
+
+        masked_tokens = batch["masked_tokens"].bool()
+        masked_token_predictions = masked_language_modeling_output[masked_tokens]
+        masked_token_labels = batch["labels"][masked_tokens]
 
         # calculate accuracy
-        masked_language_modeling_accuracy = self.masked_language_modeling_accuracy(
+        mlm_acc = self.masked_language_modeling_accuracy(
             masked_token_predictions, masked_token_labels
         )
+        return mlm_acc
 
-        return masked_language_modeling_loss, masked_language_modeling_accuracy
-
-    def calculate_next_sentence_prediction_loss(self, batch, next_sentence_prediction_output):
+    def calculate_nsp_loss(self, batch, next_sentence_prediction_output):
         next_sentence_prediction_labels = batch["labels"][..., 0]
 
         if next_sentence_prediction_labels.dtype != torch.float32:
             next_sentence_prediction_labels = next_sentence_prediction_labels.to(torch.float32)
 
         # calculate loss
-        next_sentence_prediction_loss = self.next_sentence_prediction_loss_function(
+        nsp_loss = self.next_sentence_prediction_loss_function(
             next_sentence_prediction_output, next_sentence_prediction_labels
         )
+        return nsp_loss
+
+    def calculate_nsp_acc(self, batch, next_sentence_prediction_output):
+        next_sentence_prediction_labels = batch["labels"][..., 0]
+
+        if next_sentence_prediction_labels.dtype != torch.float32:
+            next_sentence_prediction_labels = next_sentence_prediction_labels.to(torch.float32)
 
         # calculate accuracy
-        next_sentence_prediction_accuracy = self.next_sentence_prediction_accuracy(
+        nsp_acc = self.next_sentence_prediction_accuracy(
             next_sentence_prediction_output, next_sentence_prediction_labels
         )
-
-        return next_sentence_prediction_loss, next_sentence_prediction_accuracy
+        return nsp_acc
 
     def save_checkpoint(self, experiment_name: str, step: int):
         experiment_path = Path(__file__).parent.parent / "experiments" / experiment_name
