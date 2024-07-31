@@ -49,7 +49,6 @@ class TrainerForPreTraining:
         with_nsp: bool = True,
         with_wandb: bool = True
     ):
-        # TODO: implement gradient accumulation by only applying loss.backward every x steps + dividing the loss by the number of accumulation steps to normalize them
         # TODO: add micro and macro batch size - make sure that num_gpus * micro * gradient_accumulation_steps == macro_batch_size
         self.masked_language_modeling_accuracy.reset()
         self.next_sentence_prediction_accuracy.reset()
@@ -124,9 +123,7 @@ class TrainerForPreTraining:
     @staticmethod
     def count_tokens_in_batch(batch, tokenizer):
         # TODO: Count this number after the training
-        total_number_of_tokens = batch["input_ids"].numel()
-        number_of_pad_tokens = (batch["input_ids"] == tokenizer.pad_token_id).sum().item()
-        return total_number_of_tokens - number_of_pad_tokens
+        return (~batch["special_tokens"].bool()).sum()
 
     def calculate_mlm_loss(
         self,
