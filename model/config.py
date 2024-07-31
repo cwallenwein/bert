@@ -23,6 +23,7 @@ class BertConfig:
     positional_information_type: str = "learned"
     attention_bias: bool = True
     layer_norm: str = "pre"
+    add_final_layer_norm: bool = False
 
     def __post_init__(self):
         self.d_head = self.d_model // self.n_heads

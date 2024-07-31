@@ -48,6 +48,10 @@ class BertModel(nn.Module):
         self.encoder = nn.ModuleList([
             BertEncoderLayer(config) for _ in range(config.n_layers)
         ])
+        if self.config.add_final_layer_norm:
+            self.final_layer_norm = nn.LayerNorm(
+                normalized_shape=config.d_model
+            )
 
     def forward(
         self,
@@ -64,6 +68,9 @@ class BertModel(nn.Module):
 
         for layer in self.encoder:
             x = layer(x, attention_mask=attention_mask)
+
+        if self.config.add_final_layer_norm:
+            x = self.final_layer_norm(x)
 
         return x
 
