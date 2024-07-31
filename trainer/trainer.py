@@ -16,8 +16,11 @@ class TrainerForPreTraining:
     def __init__(self, model: BertModelForPretraining, training_args: TrainingArguments, verbose: bool = True):
         self.training_args = training_args
         self.device = self.get_device(training_args.device)
-        self.model = model.to(self.device)
         self.verbose = verbose
+        self.model = model.to(self.device)
+
+        if training_args.use_torch_compile and self.device is not "mps":
+            self.model = torch.compile(self.model)
 
         self.masked_language_modeling_loss_function = nn.CrossEntropyLoss()
         self.next_sentence_prediction_loss_function = nn.BCEWithLogitsLoss()

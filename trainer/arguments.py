@@ -10,6 +10,7 @@ class TrainingArguments:
     device: str = "mps"
     save_model_after_training: bool = True
     gradient_accumulation_steps: int = 1
+    use_torch_compile: bool = True
 
     @classmethod
     def from_dict(cls, arguments: dict):
