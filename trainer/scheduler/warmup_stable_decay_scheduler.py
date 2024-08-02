@@ -59,9 +59,7 @@ class DynamicWarmupStableDecayScheduler(LRScheduler):
         self,
         optimizer: Optimizer,
         lr: float,
-
         warmup_steps: int,
-
         last_epoch=-1,
         verbose=False
     ):

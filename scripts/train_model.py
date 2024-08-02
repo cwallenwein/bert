@@ -18,7 +18,7 @@ def train(args):
         assert args["short_context_training_steps"] is None
         assert args["long_context_training_steps"] is None
 
-        trainer.train(training_steps=training_steps, context_length=context_length)
+        trainer.train(max_steps=training_steps, context_length=context_length)
     else:
         short_context_length = args["short_context_length"]
         long_context_length = args["long_context_length"]
@@ -31,8 +31,8 @@ def train(args):
         assert args["context_length"] is None
         assert args["training_steps"] is None
 
-        trainer.train(training_steps=short_context_training_steps, context_length=short_context_length)
-        trainer.train(training_steps=long_context_training_steps, context_length=long_context_length)
+        trainer.train(max_steps=short_context_training_steps, context_length=short_context_length)
+        trainer.train(max_steps=long_context_training_steps, context_length=long_context_length)
 
 
 parser = argparse.ArgumentParser(description="Train BERT model")
