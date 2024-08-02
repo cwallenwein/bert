@@ -11,6 +11,8 @@ class TrainingArguments:
     save_model_after_training: bool = True
     gradient_accumulation_steps: int = 1
     use_torch_compile: bool = True
+    use_gradient_clipping: bool = False
+    gradient_clipping_value: float = 0.5
 
     @classmethod
     def from_dict(cls, arguments: dict):
