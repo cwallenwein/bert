@@ -14,24 +14,28 @@ class BertDatasetPreprocessor:
 
     def preprocess(self, num_tokens: int):
         assert num_tokens & self.context_length == 0
+        num_samples = num_tokens // self.context_length
+
+        dataset = self.dataset.shuffle(seed=42)
 
         # tokenize dataset
-        dataset_tokenizer = DatasetTokenizer(self.dataset, tokenizer=self.tokenizer)
-        tokenized_dataset = dataset_tokenizer(context_length=self.context_length, batch_size=4000, num_proc=8)
+        dataset_tokenizer = DatasetTokenizer(dataset, tokenizer=self.tokenizer)
+        tokenized_dataset = dataset_tokenizer(num_samples=num_samples, context_length=self.context_length, batch_size=128, num_proc=1)
 
-        # upsample dataset
-        random_indices = self.get_random_indices(dataset=tokenized_dataset, num_tokens=num_tokens)
-        tokenized_dataset = tokenized_dataset.select(random_indices)
+        if len(tokenized_dataset) < num_samples:
+            # upsample dataset
+            random_indices = self.get_random_indices(dataset=tokenized_dataset, num_samples=num_samples)
+            tokenized_dataset = tokenized_dataset.select(random_indices)
 
         # mask dataset
         mlm_preprocessor = MaskedLanguageModelingPreprocessor(tokenized_dataset, self.tokenizer)
-        masked_dataset = mlm_preprocessor(batch_size=1000, num_proc=8)
+        masked_dataset = mlm_preprocessor(batch_size=128, num_proc=8)
 
         return masked_dataset
 
-    def get_random_indices(self, dataset: Dataset, num_tokens: int):
+    @staticmethod
+    def get_random_indices(dataset: Dataset, num_samples: int):
         len_dataset = len(dataset)
-        num_samples = num_tokens // self.context_length
 
         if num_samples < len_dataset:
             # sample without replacement
