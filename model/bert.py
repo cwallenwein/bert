@@ -1,6 +1,6 @@
 from torch import nn
 from model.config import BertConfig
-from model.attention import MultiHeadAttentionBuilder
+from model.attention import MultiHeadAttention
 from model.embedding import BertEmbedding
 from model.util import init_xavier
 from model.gated_linear_unit import GatedLinearUnit2
@@ -11,6 +11,7 @@ from torch import Tensor
 
 
 class BertModelForPretraining(nn.Module):
+    # TODO: implement and test flash attention
     # TODO: add an option for weight tying to the config
     def __init__(self, config: BertConfig):
         super().__init__()
@@ -97,7 +98,7 @@ class BertEncoderLayer(nn.Module):
                 GatedLinearUnit2(),
                 nn.Linear(config.feed_forward_intermediate_size // 2, config.d_model, bias=config.feed_forward_bias),
             )
-        self.multi_head_attention = MultiHeadAttentionBuilder(config).build()
+        self.multi_head_attention = MultiHeadAttention(config)
 
         self.layer_norm1 = nn.LayerNorm(
             normalized_shape=config.d_model
