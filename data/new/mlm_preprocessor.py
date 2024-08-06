@@ -9,7 +9,6 @@ class MaskedLanguageModelingPreprocessor:
     Takes a tokenized dataset and applies masked language modeling
     Input columns:
         - input_ids
-        - token_type_ids
         - attention_mask
         - special_tokens_mask
 
@@ -18,7 +17,6 @@ class MaskedLanguageModelingPreprocessor:
         - masked_tokens_mask
 
         - input_ids
-        - token_type_ids
         - attention_mask
         - special_tokens_mask
     """
@@ -34,7 +32,7 @@ class MaskedLanguageModelingPreprocessor:
         cleanup_cache: bool = False
     ):
         assert sorted(dataset.column_names) == [
-            "attention_mask", "input_ids", "special_tokens_mask", "token_type_ids"
+            "attention_mask", "input_ids", "special_tokens_mask"
         ], f"Actual column names: {dataset.column_names}"
         assert 0 <= p_mask <= 1
         assert 0 <= p_replacement_mask <= 1
@@ -52,9 +50,9 @@ class MaskedLanguageModelingPreprocessor:
         if cleanup_cache:
             self.dataset.cleanup_cache_files()
 
-    def __call__(self, batch_size: int = 1_000, num_proc: Optional[int] = None) -> Dataset:
-
-        dataset = self.dataset.map(
+    def __call__(self, num_samples, batch_size: int = 1_000, num_proc: Optional[int] = None) -> Dataset:
+        num_samples = min(len(self.dataset), num_samples)
+        dataset = self.dataset.select(range(num_samples)).map(
             self.mask_fn,
             batched=True,
             batch_size=batch_size,
@@ -63,7 +61,7 @@ class MaskedLanguageModelingPreprocessor:
         )
 
         assert sorted(dataset.column_names) == [
-            "attention_mask", "input_ids", "labels", "masked_tokens_mask", "special_tokens_mask", "token_type_ids"
+            "attention_mask", "input_ids", "labels", "masked_tokens_mask", "special_tokens_mask"
         ], f"Actual column names: {dataset.column_names}"
         return dataset
 
@@ -94,7 +92,7 @@ class MaskedLanguageModelingPreprocessor:
         mask = torch.where(unchanged, 3, mask)
         mask = torch.where(special_tokens, 0, mask)
 
-        batch_update["masked_tokens_mask"] = ((mask == 1) | (mask == 2) | (mask == 3)).int()
+        batch_update["masked_tokens_mask"] = ((mask == 1) | (mask == 2) | (mask == 3)).bool()
 
         # replace values according to mask
         input_ids = batch["input_ids"]
@@ -103,8 +101,13 @@ class MaskedLanguageModelingPreprocessor:
         random_token = torch.randint_like(input_ids, len(self.tokenizer))
         input_ids[mask == 2] = random_token[mask == 2]
 
-        batch_update["input_ids"] = input_ids
+        if len(self.tokenizer) <= 2 ** 16:
+            batch_update["input_ids"] = input_ids.to(torch.int16)
+            batch_update["labels"] = batch_update["labels"].to(torch.int16)
+        else:
+            batch_update["input_ids"] = input_ids
 
         # define mask (which tokens should be predicted)
         # batch["attention_mask"] = mask != 0
+
         return batch_update
