@@ -12,37 +12,31 @@ from torch import Tensor
 from jaxtyping import Float, Bool
 
 
-class ScaledDotProductAttention(nn.Module):
-    def __init__(self, config: BertConfig):
-        super().__init__()
-        self.config = config
+def scaled_dot_product_attention(
+    query: Float[Tensor, "batch n_heads seq_len d_head"],
+    key: Float[Tensor, "batch n_heads seq_len d_head"],
+    value: Float[Tensor, "batch n_heads seq_len d_head"],
+    attention_mask: Bool[Tensor, "batch seq_len"]
+):
+    attention_score = einsum(
+        query, key,
+        "batch n_heads query_len d_head, batch n_heads key_len d_head -> batch n_heads query_len key_len"
+    )
+    mask = torch.where(attention_mask, 0, float("inf"))
+    # add dim for broadcasting (n_heads, query_len)
+    mask = mask[:, None, None, :]
 
-    def forward(
-        self,
-        query: Float[Tensor, "batch n_heads seq_len d_head"],
-        key: Float[Tensor, "batch n_heads seq_len d_head"],
-        value: Float[Tensor, "batch n_heads seq_len d_head"],
-        attention_mask: Bool[Tensor, "batch seq_len"]
-    ):
-        attention_score = einsum(
-            query, key,
-            "batch n_heads query_len d_head, batch n_heads key_len d_head -> batch n_heads query_len key_len"
-        )
-        mask = torch.where(attention_mask, 0, float("inf"))
-        # add dim for broadcasting (n_heads, query_len)
-        mask = mask[:, None, None, :]
+    attention_score -= mask
+    attention_probability = F.softmax(
+        attention_score / math.sqrt(query.size(-1)),
+        dim=-1
+    )
+    output = einsum(
+        attention_probability, value,
+        "batch n_heads query_len key_len, batch n_heads seq_len d_head -> batch n_heads query_len d_head"
+    )
 
-        attention_score -= mask
-        attention_probability = F.softmax(
-            attention_score / math.sqrt(self.config.d_model),
-            dim=-1
-        )
-        output = einsum(
-            attention_probability, value,
-            "batch n_heads query_len key_len, batch n_heads seq_len d_head -> batch n_heads query_len d_head"
-        )
-
-        return output
+    return output
 
 
 class MultiHeadAttention(nn.Module):
@@ -83,7 +77,7 @@ class MultiHeadAttention(nn.Module):
         )
 
         if self.config.multi_head_attention_implementation == "default":
-            attention_output = self.scaled_dot_product_attention(
+            attention_output = scaled_dot_product_attention(
                 query,
                 key,
                 value,
