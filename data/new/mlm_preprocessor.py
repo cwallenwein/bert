@@ -2,6 +2,7 @@ from datasets import Dataset
 from transformers import PreTrainedTokenizerFast
 from typing import Optional
 import torch
+from datasets import Features, Value, Sequence
 
 
 class MaskedLanguageModelingPreprocessor:
@@ -50,7 +51,7 @@ class MaskedLanguageModelingPreprocessor:
         if cleanup_cache:
             self.dataset.cleanup_cache_files()
 
-    def __call__(self, num_samples, batch_size: int = 1_000, num_proc: Optional[int] = None) -> Dataset:
+    def __call__(self, num_samples, context_length: int = 128, batch_size: int = 1_000, num_proc: Optional[int] = None) -> Dataset:
         num_samples = min(len(self.dataset), num_samples)
         dataset = self.dataset.select(range(num_samples)).map(
             self.mask_fn,
@@ -58,6 +59,13 @@ class MaskedLanguageModelingPreprocessor:
             batch_size=batch_size,
             desc="Masking dataset",
             num_proc=num_proc,
+            features=Features({
+                "attention_mask": Sequence(feature=Value(dtype="bool", id=None), length=context_length, id=None),
+                "input_ids": Sequence(feature=Value(dtype="int16", id=None), length=context_length, id=None),
+                "labels": Sequence(feature=Value(dtype="int16", id=None), length=context_length, id=None),
+                "masked_tokens_mask": Sequence(feature=Value(dtype="bool", id=None), length=context_length, id=None),
+                "special_tokens_mask": Sequence(feature=Value(dtype="bool", id=None), length=context_length, id=None)
+            })
         )
 
         assert sorted(dataset.column_names) == [
@@ -101,11 +109,7 @@ class MaskedLanguageModelingPreprocessor:
         random_token = torch.randint_like(input_ids, len(self.tokenizer))
         input_ids[mask == 2] = random_token[mask == 2]
 
-        if len(self.tokenizer) <= 2 ** 16:
-            batch_update["input_ids"] = input_ids.to(torch.int16)
-            batch_update["labels"] = batch_update["labels"].to(torch.int16)
-        else:
-            batch_update["input_ids"] = input_ids
+        batch_update["input_ids"] = input_ids
 
         # define mask (which tokens should be predicted)
         # batch["attention_mask"] = mask != 0
