@@ -24,6 +24,7 @@ class BertConfig:
     attention_bias: bool = True
     layer_norm: str = "pre"
     add_final_layer_norm: bool = False
+    with_next_sentence_prediction: bool = True
 
     def __post_init__(self):
         self.d_head = self.d_model // self.n_heads

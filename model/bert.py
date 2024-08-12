@@ -11,6 +11,7 @@ from torch import Tensor
 
 
 class BertModelForPretraining(nn.Module):
+    # TODO: implement sparse token prediction
     # TODO: implement and test flash attention
     # TODO: add an option for weight tying to the config
     def __init__(self, config: BertConfig):
@@ -18,25 +19,30 @@ class BertModelForPretraining(nn.Module):
         self.config: BertConfig = config
         self.bert = BertModel(config)
         self.masked_language_modeling_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
-        self.next_sentence_prediction_head = nn.Linear(config.d_model, 1, bias=False)
+        if config.with_next_sentence_prediction:
+            self.next_sentence_prediction_head = nn.Linear(config.d_model, 1, bias=False)
 
     def forward(
         self,
         input_ids: Float[Tensor, "batch sequence_length"],
-        token_type_ids: Float[Tensor, "batch sequence_length"],
         attention_mask: Float[Tensor, "batch sequence_length"],
+        token_type_ids: Float[Tensor, "batch sequence_length"] = None,
         **kwargs
     ):
+
         bert_output = self.bert(
             input_ids=input_ids,
             token_type_ids=token_type_ids,
             attention_mask=attention_mask
         )
         mlm_output = self.masked_language_modeling_head(bert_output)
-        nsp_output = self.next_sentence_prediction_head(
-            bert_output[..., 0, :]
-        ).squeeze(-1)
-        return mlm_output, nsp_output
+        if self.config.with_next_sentence_prediction:
+            nsp_output = self.next_sentence_prediction_head(
+                bert_output[..., 0, :]
+            ).squeeze(-1)
+            return mlm_output, nsp_output
+        else:
+            return mlm_output, None
 
 
 class BertModel(nn.Module):

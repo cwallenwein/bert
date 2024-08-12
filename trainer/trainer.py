@@ -16,6 +16,8 @@ from datasets import Dataset
 class TrainerForPreTraining:
     # TODO: log time / step
     # TODO: log total wallclock time
+    # TODO: log flops / utilization
+    # TODO: add lr for max_steps (currently only supported for max_time_in_min)
     def __init__(self, experiment_name: str, training_args: TrainingArguments, verbose: bool = True):
         self.training_args = training_args
         self.device = self.get_device(training_args.device)
@@ -154,7 +156,7 @@ class TrainerForPreTraining:
     @staticmethod
     def count_tokens_in_batch(batch, tokenizer):
         # TODO: Count this number after the training
-        return (~batch["special_tokens"].bool()).sum()
+        return (~batch["special_tokens_mask"].bool()).sum()
 
     def calculate_loss(
         self,
@@ -182,7 +184,7 @@ class TrainerForPreTraining:
         batch,
         masked_language_modeling_output
     ):
-        masked_tokens = batch["masked_tokens"].bool()
+        masked_tokens = batch["masked_tokens_mask"].bool()
         masked_token_predictions = masked_language_modeling_output[masked_tokens]
         masked_token_labels = batch["labels"][masked_tokens]
 
@@ -192,7 +194,7 @@ class TrainerForPreTraining:
         return mlm_loss
 
     def calculate_mlm_acc(self, batch, masked_language_modeling_output):
-        masked_tokens = batch["masked_tokens"].bool()
+        masked_tokens = batch["masked_tokens_mask"].bool()
         masked_token_predictions = masked_language_modeling_output[masked_tokens]
         masked_token_labels = batch["labels"][masked_tokens]
 
@@ -205,10 +207,6 @@ class TrainerForPreTraining:
     def calculate_nsp_loss(self, batch, next_sentence_prediction_output):
         next_sentence_prediction_labels = batch["labels"][..., 0]
 
-        # TODO: remove this
-        if next_sentence_prediction_labels.dtype != torch.float32:
-            next_sentence_prediction_labels = next_sentence_prediction_labels.to(torch.float32)
-
         # calculate loss
         nsp_loss = self.nsp_loss_fn(
             next_sentence_prediction_output, next_sentence_prediction_labels
@@ -217,10 +215,6 @@ class TrainerForPreTraining:
 
     def calculate_nsp_acc(self, batch, next_sentence_prediction_output):
         next_sentence_prediction_labels = batch["labels"][..., 0]
-
-        # TODO: remove this
-        if next_sentence_prediction_labels.dtype != torch.float32:
-            next_sentence_prediction_labels = next_sentence_prediction_labels.to(torch.float32)
 
         # calculate accuracy
         nsp_acc = self.nsp_accuracy(

@@ -18,10 +18,11 @@ class BertEmbedding(nn.Module):
             embedding_dim=config.d_model
         )
 
-        self.segment_embedding_matrix = nn.Embedding(
-            num_embeddings=config.n_segments,
-            embedding_dim=config.d_model
-        )
+        if config.with_next_sentence_prediction:
+            self.segment_embedding_matrix = nn.Embedding(
+                num_embeddings=config.n_segments,
+                embedding_dim=config.d_model
+            )
 
         if config.positional_information_type == "learned":
             self.positional_information = nn.Embedding(
@@ -41,6 +42,7 @@ class BertEmbedding(nn.Module):
 
         self.layer_norm = nn.LayerNorm(config.d_model)
         self.embedding_dropout = nn.Dropout(config.p_embedding_dropout)
+        self.with_next_sentence_prediction = config.with_next_sentence_prediction
 
         self._init_weights()
 
@@ -53,17 +55,21 @@ class BertEmbedding(nn.Module):
         token_position = torch.arange(sequence_length, device=input_ids.device)
 
         token_embeddings = self.token_embedding_matrix(input_ids)
-        segment_embeddings = self.segment_embedding_matrix(segment_ids)
         positional_information = self.positional_information(token_position)
+        x = token_embeddings + positional_information
 
-        x = token_embeddings + segment_embeddings + positional_information
+        if self.with_next_sentence_prediction:
+            segment_embeddings = self.segment_embedding_matrix(segment_ids)
+            x += segment_embeddings
+
         x = self.layer_norm(x)
         x = self.embedding_dropout(x)
         return x
 
     def _init_weights(self):
         init_xavier(embedding=self.token_embedding_matrix)
-        init_xavier(embedding=self.segment_embedding_matrix)
+        if self.with_next_sentence_prediction:
+            init_xavier(embedding=self.segment_embedding_matrix)
         if isinstance(self.positional_information, nn.Embedding):
             init_xavier(embedding=self.positional_information)
 
