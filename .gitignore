@@ -4,3 +4,6 @@ model/pretrained/pytorch/
 model/pretrained/tensorflow/
 data/datasets/
 .idea
+wandb
+
+*.pt
