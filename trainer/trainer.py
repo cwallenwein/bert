@@ -4,8 +4,7 @@ from torch import nn, optim
 from tqdm import tqdm
 from pathlib import Path
 from trainer.arguments import TrainingArguments
-from model import BertModelForPretraining
-from model.config import BertConfig
+from model.bert import BertConfig, BertModelForPretraining
 from data.save_and_load import get_tokenizer
 import torchmetrics
 import wandb

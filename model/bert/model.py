@@ -1,48 +1,14 @@
 from torch import nn
-from model.config import BertConfig
-from model.attention import MultiHeadAttention
-from model.embedding import BertEmbedding
+import torch
 from model.util import init_xavier
-from model.gated_linear_unit import GatedLinearUnit2
+from model.bert.config import BertConfig
+from model.attention import MultiHeadAttention
+from model.activation_functions import GatedLinearUnit
+from model.positional_information import SinusoidalPositionalEmbeddings, ScaledSinusoidalPositionalEmbeddings
 
 # Typehints
 from jaxtyping import Float
 from torch import Tensor
-
-
-class BertModelForPretraining(nn.Module):
-    # TODO: implement sparse token prediction
-    # TODO: implement and test flash attention
-    # TODO: add an option for weight tying to the config
-    def __init__(self, config: BertConfig):
-        super().__init__()
-        self.config: BertConfig = config
-        self.bert = BertModel(config)
-        self.masked_language_modeling_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
-        if config.with_next_sentence_prediction:
-            self.next_sentence_prediction_head = nn.Linear(config.d_model, 1, bias=False)
-
-    def forward(
-        self,
-        input_ids: Float[Tensor, "batch sequence_length"],
-        attention_mask: Float[Tensor, "batch sequence_length"],
-        token_type_ids: Float[Tensor, "batch sequence_length"] = None,
-        **kwargs
-    ):
-
-        bert_output = self.bert(
-            input_ids=input_ids,
-            token_type_ids=token_type_ids,
-            attention_mask=attention_mask
-        )
-        mlm_output = self.masked_language_modeling_head(bert_output)
-        if self.config.with_next_sentence_prediction:
-            nsp_output = self.next_sentence_prediction_head(
-                bert_output[..., 0, :]
-            ).squeeze(-1)
-            return mlm_output, nsp_output
-        else:
-            return mlm_output, None
 
 
 class BertModel(nn.Module):
@@ -82,6 +48,72 @@ class BertModel(nn.Module):
         return x
 
 
+class BertEmbedding(nn.Module):
+
+    def __init__(self, config: BertConfig):
+        super().__init__()
+        self.positional_information_type = config.positional_information_type
+        self.token_embedding_matrix = nn.Embedding(
+            num_embeddings=config.vocab_size,
+            embedding_dim=config.d_model
+        )
+
+        if config.with_next_sentence_prediction:
+            self.segment_embedding_matrix = nn.Embedding(
+                num_embeddings=config.n_segments,
+                embedding_dim=config.d_model
+            )
+
+        if config.positional_information_type == "learned":
+            self.positional_information = nn.Embedding(
+                num_embeddings=config.context_length,
+                embedding_dim=config.d_model,
+            )
+        elif config.positional_information_type == "sinusoidal":
+            self.positional_information = SinusoidalPositionalEmbeddings(
+                num_embeddings=config.context_length,
+                embedding_dim=config.d_model,
+            )
+        elif config.positional_information_type == "scaled_sinusoidal":
+            self.positional_information = ScaledSinusoidalPositionalEmbeddings(
+                num_embeddings=config.context_length,
+                embedding_dim=config.d_model,
+            )
+
+        self.layer_norm = nn.LayerNorm(config.d_model)
+        self.embedding_dropout = nn.Dropout(config.p_embedding_dropout)
+        self.with_next_sentence_prediction = config.with_next_sentence_prediction
+
+        self._init_weights()
+
+    def forward(
+        self,
+        input_ids: Float[Tensor, "batch sequence_length"],
+        segment_ids: Float[Tensor, "batch sequence_length"],
+    ):
+        sequence_length = input_ids.size(1)
+        token_position = torch.arange(sequence_length, device=input_ids.device)
+
+        token_embeddings = self.token_embedding_matrix(input_ids)
+        positional_information = self.positional_information(token_position)
+        x = token_embeddings + positional_information
+
+        if self.with_next_sentence_prediction:
+            segment_embeddings = self.segment_embedding_matrix(segment_ids)
+            x += segment_embeddings
+
+        x = self.layer_norm(x)
+        x = self.embedding_dropout(x)
+        return x
+
+    def _init_weights(self):
+        init_xavier(embedding=self.token_embedding_matrix)
+        if self.with_next_sentence_prediction:
+            init_xavier(embedding=self.segment_embedding_matrix)
+        if isinstance(self.positional_information, nn.Embedding):
+            init_xavier(embedding=self.positional_information)
+
+
 class BertEncoderLayer(nn.Module):
     def __init__(self, config: BertConfig):
         super().__init__()
@@ -101,10 +133,15 @@ class BertEncoderLayer(nn.Module):
         elif config.feed_forward_activation == "glu":
             self.feed_forward = nn.Sequential(
                 nn.Linear(config.d_model, config.feed_forward_intermediate_size, bias=config.feed_forward_bias),
-                GatedLinearUnit2(),
+                GatedLinearUnit(),
                 nn.Linear(config.feed_forward_intermediate_size // 2, config.d_model, bias=config.feed_forward_bias),
             )
-        self.multi_head_attention = MultiHeadAttention(config)
+        self.multi_head_attention = MultiHeadAttention(
+            d_model=config.d_model,
+            n_heads=config.n_heads,
+            bias=config.attention_bias,
+            attention_implementation=config.attention_implementation
+        )
 
         self.layer_norm1 = nn.LayerNorm(
             normalized_shape=config.d_model

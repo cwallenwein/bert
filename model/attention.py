@@ -2,7 +2,6 @@ import math
 import torch
 from torch import nn
 from torch.nn import functional as F
-from model.config import BertConfig
 from model.util import init_xavier
 
 from einops import einsum, rearrange
@@ -10,6 +9,8 @@ from einops import einsum, rearrange
 # type hints
 from torch import Tensor
 from jaxtyping import Float, Bool
+
+# TODO: Fix attention mask for flash attention
 
 
 def scaled_dot_product_attention(
@@ -40,18 +41,22 @@ def scaled_dot_product_attention(
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, config: BertConfig):
+    def __init__(self, d_model: int, n_heads: int, bias: bool, attention_implementation: str = "default"):
         super().__init__()
 
-        self.config = config
+        assert attention_implementation in ["default", "pytorch", "flash-attn"]
 
-        self.query_weight = nn.Linear(config.d_model, config.n_heads * config.d_head, bias=config.attention_bias)
-        self.key_weight = nn.Linear(config.d_model, config.n_heads * config.d_head, bias=config.attention_bias)
-        self.value_weight = nn.Linear(config.d_model, config.n_heads * config.d_head, bias=config.attention_bias)
-        self.output_weight = nn.Linear(config.d_model, config.d_model, bias=config.attention_bias)
+        self.d_model = d_model
+        self.n_heads = n_heads
+        self.d_head = d_model // n_heads
+        self.bias = bias
+        self.attention_implementation = attention_implementation
 
-        if self.config.multi_head_attention_implementation == "default":
-            self.scaled_dot_product_attention = ScaledDotProductAttention(config=config)
+        # d_model -> n_heads * d_head & d_model == n_heads * d_head
+        self.query_weight = nn.Linear(d_model, d_model, bias=bias)
+        self.key_weight = nn.Linear(d_model, d_model, bias=bias)
+        self.value_weight = nn.Linear(d_model, d_model, bias=bias)
+        self.output_weight = nn.Linear(d_model, d_model, bias=bias)
 
         self._init_weights()
 
@@ -63,33 +68,42 @@ class MultiHeadAttention(nn.Module):
         query = rearrange(
             self.query_weight(x),
             "batch seq_len (n_heads d_head) -> batch n_heads seq_len d_head",
-            n_heads=self.config.n_heads
+            n_heads=self.n_heads
         )
         key = rearrange(
             self.key_weight(x),
             "batch seq_len (n_heads d_head) -> batch n_heads seq_len d_head",
-            n_heads=self.config.n_heads
+            n_heads=self.n_heads
         )
         value = rearrange(
             self.value_weight(x),
             "batch seq_len (n_heads d_head) -> batch n_heads seq_len d_head",
-            n_heads=self.config.n_heads
+            n_heads=self.n_heads
         )
 
-        if self.config.multi_head_attention_implementation == "default":
+        if self.attention_implementation == "default":
             attention_output = scaled_dot_product_attention(
                 query,
                 key,
                 value,
                 attention_mask
             )
-        elif self.config.multi_head_attention_implementation == "pytorch":
+        elif self.attention_implementation == "pytorch":
             attention_output = F.scaled_dot_product_attention(
                 query,
                 key,
                 value,
                 attn_mask=attention_mask[:, None, None, :]
             )
+        elif self.attention_implementation == "flash-attn":
+            attention_output = F.scaled_dot_product_attention(
+                query.transpose(1, 2),
+                key.transpose(1, 2),
+                value.transpose(1, 2),
+                # attn_mask=attention_mask[:, None, None, :]
+            ).transpose(1, 2)
+        else:
+            raise Exception("Unknown multi-head attention implementation")
 
         attention_output = rearrange(attention_output, "batch n_heads seq_len d_head -> batch seq_len (n_heads d_head)")
 
