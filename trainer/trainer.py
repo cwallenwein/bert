@@ -11,6 +11,8 @@ import wandb
 from trainer.scheduler import DynamicWarmupStableDecayScheduler
 from datasets import Dataset
 
+# TODO: merge trainer for pre-training and fine-tuning?
+
 
 class TrainerForPreTraining:
     # TODO: log time / step
@@ -28,10 +30,20 @@ class TrainerForPreTraining:
         model: BertModelForPretraining,
         dataset: Dataset,
         max_steps: int = None,
+        max_epochs: int = None,
         max_time_in_min: int = None,
         with_nsp: bool = True,
     ):
-        assert max_steps is not None and max_time_in_min is None or max_steps is None and max_time_in_min is not None, "Either max_steps or max_time_in_min must be provided"
+        # TODO: prepare everything
+        # TODO: depending on max_steps, max_epochs or max_time_in_min decide how to iterate
+        # TODO: make inner iteration identical
+
+        if max_steps is not None:
+            assert max_epochs is None and max_time_in_min is None
+        elif max_epochs is not None:
+            assert max_steps is None and max_time_in_min is None
+        elif max_time_in_min is not None:
+            assert max_steps is None and max_time_in_min is None
 
         # initialize variables
         total_tokens = 0
@@ -134,6 +146,8 @@ class TrainerForPreTraining:
             optimizer.step()
             optimizer.zero_grad()
             scheduler.step()
+
+
 
             if max_time_in_sec is not None:
                 training_time_in_sec = (time.time() - start_time)
@@ -244,10 +258,9 @@ class TrainerForPreTraining:
     @staticmethod
     def initialize_wandb(model_config: BertConfig, training_args: TrainingArguments):
         wandb.init(
-            # set the wandb project where this run will be logged
             project="BERT",
-
-            # track hyperparameters and run metadata
+            job_type="pretraining",
+            dir="..",
             config={
                 "model": model_config.__dict__,
                 "training_args": training_args.__dict__,
