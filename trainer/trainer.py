@@ -36,7 +36,6 @@ class TrainerForPreTraining:
         max_steps: int = None,
         max_epochs: int = None,
         max_time_in_min: int = None,
-        with_nsp: bool = True,
     ):
         # TODO: prepare everything
         # TODO: depending on max_steps, max_epochs or max_time_in_min decide how to iterate
@@ -57,22 +56,12 @@ class TrainerForPreTraining:
         if self.training_args.with_wandb:
             self.initialize_wandb(model.config, self.training_args)
 
-        # define metrics
-        self.mlm_accuracy = torchmetrics.Accuracy(
-            task="multiclass",
-            num_classes=model.config.vocab_size,
-            average="micro"
-        ).to(self.device)
-        self.nsp_accuracy = torchmetrics.Accuracy(
-            task="binary",
-            average="micro"
-        ).to(self.device)
-
         # prepare model
         model = model.to(self.device)
         if self.training_args.use_torch_compile and self.device != "mps":
             model = torch.compile(model)
         model.train()
+        model.wandb = wandb
 
         # prepare dataset
         dataset.set_format("torch", device=self.device)
@@ -113,21 +102,11 @@ class TrainerForPreTraining:
 
                 # calculate loss
                 batch_idx = step*self.training_args.gradient_accumulation_steps+micro_step
-                micro_batch_loss = model.training_step(micro_batch, batch_idx) / self.training_args.gradient_accumulation_steps
+                micro_batch_loss = model.training_step(micro_batch, batch_idx, step, micro_step) / self.training_args.gradient_accumulation_steps
                 macro_batch_loss += micro_batch_loss.item()
 
                 # do backward pass
                 micro_batch_loss.backward()
-
-                # only log if first micro_batch to reduce overhead
-                # TODO: fix this
-                # if micro_step == 0:
-                #     # calculate mlm and nsp accuracy
-                #     accuracies = self.calculate_accuracies(
-                #         micro_batch, with_nsp, masked_language_modeling_output, next_sentence_prediction_output
-                #     )
-                #     if self.training_args.with_wandb:
-                #         wandb.log(accuracies, step=step)
 
                 # count tokens in batch
                 total_tokens += self.count_tokens_in_batch(micro_batch, get_tokenizer())
@@ -167,33 +146,6 @@ class TrainerForPreTraining:
     def count_tokens_in_batch(batch, tokenizer):
         # TODO: Count this number after the training
         return (~batch["special_tokens_mask"].bool()).sum()
-
-    def calculate_accuracies(self, batch, with_nsp: bool, masked_language_modeling_output, next_sentence_prediction_output):
-        accuracies = dict()
-        accuracies["mlm_acc"] = self.calculate_mlm_acc(batch, masked_language_modeling_output)
-        if with_nsp:
-            accuracies["nsp_acc"] = self.calculate_nsp_acc(batch, next_sentence_prediction_output)
-        return accuracies
-
-    def calculate_mlm_acc(self, batch, masked_language_modeling_output):
-        masked_tokens = batch["masked_tokens_mask"].bool()
-        masked_token_predictions = masked_language_modeling_output[masked_tokens]
-        masked_token_labels = batch["labels"][masked_tokens]
-
-        # calculate accuracy
-        mlm_acc = self.mlm_accuracy(
-            masked_token_predictions, masked_token_labels
-        )
-        return mlm_acc
-
-    def calculate_nsp_acc(self, batch, next_sentence_prediction_output):
-        next_sentence_prediction_labels = batch["labels"][..., 0]
-
-        # calculate accuracy
-        nsp_acc = self.nsp_accuracy(
-            next_sentence_prediction_output, next_sentence_prediction_labels
-        )
-        return nsp_acc
 
     def save_checkpoint(self, model: nn.Module, optimizer: optim.Optimizer, experiment_name: str, step: int):
         experiment_path = Path(__file__).parent.parent / "experiments" / experiment_name

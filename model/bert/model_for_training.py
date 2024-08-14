@@ -1,7 +1,9 @@
+import torch
 from torch import nn, optim
 from model.bert.config import BertConfig
 from model.bert.model import BertModel
 import lightning as L
+import torchmetrics
 
 # Typehints
 from jaxtyping import Float
@@ -17,16 +19,26 @@ class BertModelForPretraining(L.LightningModule):
         self.config: BertConfig = config
         self.bert = BertModel(config)
         self.learning_rate = learning_rate
+        self.wandb = None
 
         # masked language modeling
         self.masked_language_modeling_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
         # TODO: check if softmax and cross entropy loss is combined?
         self.mlm_loss_fn = nn.CrossEntropyLoss()
+        self.mlm_accuracy = torchmetrics.Accuracy(
+            task="multiclass",
+            num_classes=config.vocab_size,
+            average="micro"
+        ).to(self.device)
 
         # next sentence prediction
         if config.with_next_sentence_prediction:
             self.next_sentence_prediction_head = nn.Linear(config.d_model, 1, bias=False)
             self.nsp_loss_fn = nn.BCEWithLogitsLoss()
+            self.nsp_accuracy = torchmetrics.Accuracy(
+                task="binary",
+                average="micro"
+            ).to(self.device)
 
     def forward(
         self,
@@ -50,10 +62,16 @@ class BertModelForPretraining(L.LightningModule):
         else:
             return mlm_output, None
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx, step, micro_step):
         masked_language_modeling_output, next_sentence_prediction_output = self(**batch)
 
-        masked_tokens = batch["masked_tokens_mask"].bool()
+        # only log if first micro_batch to reduce overhead
+        if micro_step == 0:
+            metrics = self.calculate_metrics(batch, masked_language_modeling_output, next_sentence_prediction_output)
+            self.wandb.log(metrics, step=step)
+
+        masked_tokens = batch["masked_tokens_mask"]
+        # TODO: don't filter output here
         masked_token_predictions = masked_language_modeling_output[masked_tokens]
         masked_token_labels = batch["labels"][masked_tokens]
         mlm_loss = self.mlm_loss_fn(masked_token_predictions, masked_token_labels)
@@ -77,6 +95,29 @@ class BertModelForPretraining(L.LightningModule):
         )
         return optimizer
 
+    def calculate_metrics(self, batch, masked_language_modeling_output, next_sentence_prediction_output):
+        metrics = dict()
+
+        masked_tokens = batch["masked_tokens_mask"]
+        masked_token_predictions = masked_language_modeling_output[masked_tokens]
+        masked_token_labels = batch["labels"][masked_tokens]
+
+        # calculate accuracy
+        mlm_acc = self.mlm_accuracy(
+            masked_token_predictions, masked_token_labels
+        )
+        # print(mlm_acc, (torch.argmax(masked_token_predictions, dim=1) == masked_token_labels).sum())
+        metrics["mlm_acc"] = mlm_acc
+
+        if self.config.with_next_sentence_prediction:
+            next_sentence_prediction_labels = batch["labels"][..., 0]
+
+            # calculate accuracy
+            metrics["nsp_acc"] = self.nsp_accuracy(
+                next_sentence_prediction_output, next_sentence_prediction_labels
+            )
+        return metrics
+
 
 class BertModelForSequenceClassification(nn.Module):
 
@@ -90,6 +131,11 @@ class BertModelForSequenceClassification(nn.Module):
 
         self.classification_head = nn.Linear(self.config.d_model, num_classes, bias=False)
         self.classification_loss_fn = nn.CrossEntropyLoss()
+        self.classification_accuracy = torchmetrics.Accuracy(
+            task="multiclass",
+            num_classes=num_classes,
+            average="micro"
+        ).to(self.device)
 
         # freeze bert
         for param in self.bert.parameters():
@@ -111,12 +157,18 @@ class BertModelForSequenceClassification(nn.Module):
         )
         return classification_output.squeeze(-1)
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx, step, micro_step):
         sequence_classification_output = self(**batch)
 
         classification_loss = self.classification_loss_fn(
             sequence_classification_output, batch["labels"]
         )
+
+        # only log if first micro_batch to reduce overhead
+        if micro_step == 0:
+            metrics = self.calculate_metrics(batch, sequence_classification_output)
+            self.wandb.log(metrics, step=step)
+
         return classification_loss
 
     def configure_optimizers(self):
@@ -127,3 +179,10 @@ class BertModelForSequenceClassification(nn.Module):
             eps=1e-12
         )
         return optimizer
+
+    def calculate_metrics(self, batch, sequence_classification_output):
+        accuracy = self.classification_accuracy(
+            sequence_classification_output, batch["labels"]
+        )
+        metrics = {"mnli": accuracy}
+        return metrics
