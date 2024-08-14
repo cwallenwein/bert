@@ -18,7 +18,6 @@ class BertModelForPretraining(L.LightningModule):
         self.config: BertConfig = config
         self.bert = BertModel(config)
         self.learning_rate = learning_rate
-        self.wandb = None
 
         # masked language modeling
         self.masked_language_modeling_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
@@ -62,13 +61,13 @@ class BertModelForPretraining(L.LightningModule):
         else:
             return mlm_output, None
 
-    def training_step(self, batch, batch_idx, step, micro_step):
+    def training_step(self, batch, batch_idx, step, micro_step, wandb):
         masked_language_modeling_output, next_sentence_prediction_output = self(**batch)
 
         # only log if first micro_batch to reduce overhead
         if micro_step == 0:
             metrics = self.calculate_metrics(batch, masked_language_modeling_output, next_sentence_prediction_output)
-            self.wandb.log(metrics, step=step)
+            wandb.log(metrics, step=step)
 
         masked_tokens = batch["masked_tokens_mask"]
         masked_token_predictions = masked_language_modeling_output
@@ -156,7 +155,7 @@ class BertModelForSequenceClassification(nn.Module):
         )
         return classification_output.squeeze(-1)
 
-    def training_step(self, batch, batch_idx, step, micro_step):
+    def training_step(self, batch, batch_idx, step, micro_step, wandb):
         sequence_classification_output = self(**batch)
 
         classification_loss = self.classification_loss_fn(
@@ -166,7 +165,7 @@ class BertModelForSequenceClassification(nn.Module):
         # only log if first micro_batch to reduce overhead
         if micro_step == 0:
             metrics = self.calculate_metrics(batch, sequence_classification_output)
-            self.wandb.log(metrics, step=step)
+            wandb.log(metrics, step=step)
 
         return classification_loss
 

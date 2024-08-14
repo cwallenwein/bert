@@ -9,8 +9,6 @@ from trainer.scheduler import DynamicWarmupStableDecayScheduler
 from data.save_and_load import get_tokenizer
 
 import wandb
-import torchmetrics
-
 import time
 from tqdm import tqdm
 from pathlib import Path
@@ -19,6 +17,7 @@ from pathlib import Path
 
 
 class TrainerForPreTraining:
+    # TODO: set bfloat16 for model and optimizer
     # TODO: log time / step
     # TODO: log total wallclock time
     # TODO: log flops / utilization
@@ -61,7 +60,6 @@ class TrainerForPreTraining:
         if self.training_args.use_torch_compile and self.device != "mps":
             model = torch.compile(model)
         model.train()
-        model.wandb = wandb
 
         # prepare dataset
         dataset.set_format("torch", device=self.device)
@@ -102,7 +100,7 @@ class TrainerForPreTraining:
 
                 # calculate loss
                 batch_idx = step*self.training_args.gradient_accumulation_steps+micro_step
-                micro_batch_loss = model.training_step(micro_batch, batch_idx, step, micro_step) / self.training_args.gradient_accumulation_steps
+                micro_batch_loss = model.training_step(micro_batch, batch_idx, step, micro_step, wandb) / self.training_args.gradient_accumulation_steps
                 macro_batch_loss += micro_batch_loss.item()
 
                 # do backward pass

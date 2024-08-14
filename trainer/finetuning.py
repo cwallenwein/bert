@@ -8,8 +8,6 @@ from trainer.arguments import TrainingArguments
 from trainer.scheduler import DynamicWarmupStableDecayScheduler
 
 import wandb
-import torchmetrics
-
 import math
 from tqdm import tqdm
 from pathlib import Path
@@ -32,13 +30,6 @@ class TrainerForSequenceClassificationFinetuning:
         # initialize logging
         if self.training_args.with_wandb:
             self.initialize_wandb(model.config, self.training_args)
-
-        # define metrics
-        self.classification_accuracy = torchmetrics.Accuracy(
-            task="multiclass",
-            num_classes=model.num_classes,
-            average="micro"
-        ).to(self.device)
 
         # prepare model
         model = model.to(self.device)
@@ -74,7 +65,7 @@ class TrainerForSequenceClassificationFinetuning:
                     batch_idx = epoch * steps_per_epoch * self.training_args.gradient_accumulation_steps + step * self.training_args.gradient_accumulation_steps + micro_step
 
                     # calculate loss
-                    micro_batch_loss = model.training_step(micro_batch, batch_idx) / self.training_args.gradient_accumulation_steps
+                    micro_batch_loss = model.training_step(micro_batch, batch_idx, step, micro_step, wandb) / self.training_args.gradient_accumulation_steps
                     macro_batch_loss += micro_batch_loss.item()
 
                     # do backward pass
