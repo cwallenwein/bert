@@ -117,7 +117,7 @@ class BertModelForPretraining(L.LightningModule):
         return metrics
 
 
-class BertModelForSequenceClassification(nn.Module):
+class BertModelForSequenceClassification(L.LightningModule):
 
     def __init__(self, pretrained_model: L.LightningModule, num_classes: int, learning_rate: float):
         super().__init__()
