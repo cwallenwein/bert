@@ -123,9 +123,9 @@ class TrainerForPreTraining:
             optimizer.zero_grad()
             scheduler.step()
 
-            if max_time_in_sec is not None and hasattr(scheduler, "decaying") and hasattr(scheduler, "start_decay"):
+            if max_time_in_sec is not None:
                 training_time_in_sec = (time.time() - start_time)
-                if training_time_in_sec > max_time_in_sec * 0.8 and not scheduler.decaying:
+                if training_time_in_sec > max_time_in_sec * 0.8 and hasattr(scheduler, "decaying") and hasattr(scheduler, "start_decay") and not scheduler.decaying:
                     scheduler.start_decay(step, 0.8)
                 elif training_time_in_sec > max_time_in_sec:
                     break
