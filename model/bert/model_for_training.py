@@ -11,7 +11,6 @@ from torch import Tensor
 
 
 class BertModelForPretraining(L.LightningModule):
-    # TODO: implement sparse token prediction
     # TODO: implement and test flash attention
     # TODO: add an option for weight tying to the config
     def __init__(self, config: BertConfig, learning_rate: float):
@@ -44,6 +43,7 @@ class BertModelForPretraining(L.LightningModule):
         self,
         input_ids: Float[Tensor, "batch sequence_length"],
         attention_mask: Float[Tensor, "batch sequence_length"],
+        masked_tokens_mask: Float[Tensor, "batch sequence_length"],
         token_type_ids: Float[Tensor, "batch sequence_length"] = None,
         **kwargs
     ):
@@ -53,7 +53,7 @@ class BertModelForPretraining(L.LightningModule):
             token_type_ids=token_type_ids,
             attention_mask=attention_mask
         )
-        mlm_output = self.masked_language_modeling_head(bert_output)
+        mlm_output = self.masked_language_modeling_head(bert_output[masked_tokens_mask])
         if self.config.with_next_sentence_prediction:
             nsp_output = self.next_sentence_prediction_head(
                 bert_output[..., 0, :]
@@ -71,8 +71,7 @@ class BertModelForPretraining(L.LightningModule):
             self.wandb.log(metrics, step=step)
 
         masked_tokens = batch["masked_tokens_mask"]
-        # TODO: don't filter output here
-        masked_token_predictions = masked_language_modeling_output[masked_tokens]
+        masked_token_predictions = masked_language_modeling_output
         masked_token_labels = batch["labels"][masked_tokens]
         mlm_loss = self.mlm_loss_fn(masked_token_predictions, masked_token_labels)
 
@@ -99,7 +98,7 @@ class BertModelForPretraining(L.LightningModule):
         metrics = dict()
 
         masked_tokens = batch["masked_tokens_mask"]
-        masked_token_predictions = masked_language_modeling_output[masked_tokens]
+        masked_token_predictions = masked_language_modeling_output
         masked_token_labels = batch["labels"][masked_tokens]
 
         # calculate accuracy
