@@ -70,8 +70,8 @@ class TrainerForSequenceClassificationFinetuning:
                 assert self.training_args.gradient_accumulation_steps > 0, "Gradient accumulation steps must be greater than 0"
                 for micro_step in range(self.training_args.gradient_accumulation_steps):
                     micro_batch = next(dataset_for_epoch)
+
                     batch_idx = epoch * steps_per_epoch * self.training_args.gradient_accumulation_steps + step * self.training_args.gradient_accumulation_steps + micro_step
-                    print(batch_idx)
 
                     # calculate loss
                     micro_batch_loss = model.training_step(micro_batch, batch_idx) / self.training_args.gradient_accumulation_steps
@@ -79,16 +79,6 @@ class TrainerForSequenceClassificationFinetuning:
 
                     # do backward pass
                     micro_batch_loss.backward()
-
-                    # only log if first micro_batch to reduce overhead
-                    # TODO: fix this
-                    # if micro_step == 0:
-                        # calculate classification accuracy
-                        # accuracy = self.classification_accuracy(
-                        #     sequence_classification_output, micro_batch["labels"]
-                        # )
-                        # if self.training_args.with_wandb:
-                        #     wandb.log({"mnli": accuracy}, step=(epoch * steps_per_epoch + step))
 
                 # log loss and lr
                 if self.training_args.with_wandb:
