@@ -1,15 +1,19 @@
-import time
 import torch
 from torch import nn, optim
+from datasets import Dataset
+import lightning as L
+
+from model.bert import BertConfig, BertModelForPretraining
+from trainer.arguments import TrainingArguments
+from trainer.scheduler import DynamicWarmupStableDecayScheduler
+from data.save_and_load import get_tokenizer
+
+import wandb
+import torchmetrics
+
+import time
 from tqdm import tqdm
 from pathlib import Path
-from trainer.arguments import TrainingArguments
-from model.bert import BertConfig, BertModelForPretraining
-from data.save_and_load import get_tokenizer
-import torchmetrics
-import wandb
-from trainer.scheduler import DynamicWarmupStableDecayScheduler
-from datasets import Dataset
 
 # TODO: merge trainer for pre-training and fine-tuning?
 
@@ -27,7 +31,7 @@ class TrainerForPreTraining:
 
     def train(
         self,
-        model: BertModelForPretraining,
+        model: L.LightningModule,
         dataset: Dataset,
         max_steps: int = None,
         max_epochs: int = None,
@@ -43,7 +47,7 @@ class TrainerForPreTraining:
         elif max_epochs is not None:
             assert max_steps is None and max_time_in_min is None
         elif max_time_in_min is not None:
-            assert max_steps is None and max_time_in_min is None
+            assert max_steps is None and max_epochs is None
 
         # initialize variables
         total_tokens = 0
@@ -52,11 +56,6 @@ class TrainerForPreTraining:
         # initialize logging
         if self.training_args.with_wandb:
             self.initialize_wandb(model.config, self.training_args)
-
-        # prepare loss functions
-        self.mlm_loss_fn = nn.CrossEntropyLoss()
-        if with_nsp:
-            self.nsp_loss_fn = nn.BCEWithLogitsLoss()
 
         # define metrics
         self.mlm_accuracy = torchmetrics.Accuracy(
@@ -83,12 +82,7 @@ class TrainerForPreTraining:
         dataset = dataset.iter(batch_size=self.training_args.micro_batch_size)
 
         # prepare optimizer
-        optimizer = optim.Adam(
-            model.parameters(),
-            lr=self.training_args.learning_rate,
-            betas=(self.training_args.beta1, self.training_args.beta2),
-            eps=1e-12
-        )
+        optimizer = model.configure_optimizers()
 
         # prepare scheduler
         scheduler = DynamicWarmupStableDecayScheduler(
@@ -110,25 +104,24 @@ class TrainerForPreTraining:
             assert self.training_args.gradient_accumulation_steps > 0, "Gradient accumulation steps must be greater than 0"
             for micro_step in range(self.training_args.gradient_accumulation_steps):
                 micro_batch = next(dataset)
-                masked_language_modeling_output, next_sentence_prediction_output = model(**micro_batch)
 
                 # calculate loss
-                micro_batch_loss = self.calculate_loss(
-                    micro_batch, with_nsp, masked_language_modeling_output, next_sentence_prediction_output
-                ) / self.training_args.gradient_accumulation_steps
+                batch_idx = step*self.training_args.gradient_accumulation_steps+micro_step
+                micro_batch_loss = model.training_step(micro_batch, batch_idx) / self.training_args.gradient_accumulation_steps
                 macro_batch_loss += micro_batch_loss.item()
 
                 # do backward pass
                 micro_batch_loss.backward()
 
                 # only log if first micro_batch to reduce overhead
-                if micro_step == 0:
-                    # calculate mlm and nsp accuracy
-                    accuracies = self.calculate_accuracies(
-                        micro_batch, with_nsp, masked_language_modeling_output, next_sentence_prediction_output
-                    )
-                    if self.training_args.with_wandb:
-                        wandb.log(accuracies, step=step)
+                # TODO: fix this
+                # if micro_step == 0:
+                #     # calculate mlm and nsp accuracy
+                #     accuracies = self.calculate_accuracies(
+                #         micro_batch, with_nsp, masked_language_modeling_output, next_sentence_prediction_output
+                #     )
+                #     if self.training_args.with_wandb:
+                #         wandb.log(accuracies, step=step)
 
                 # count tokens in batch
                 total_tokens += self.count_tokens_in_batch(micro_batch, get_tokenizer())
@@ -147,9 +140,7 @@ class TrainerForPreTraining:
             optimizer.zero_grad()
             scheduler.step()
 
-
-
-            if max_time_in_sec is not None:
+            if max_time_in_sec is not None and hasattr(scheduler, "decaying") and hasattr(scheduler, "start_decay"):
                 training_time_in_sec = (time.time() - start_time)
                 if training_time_in_sec > max_time_in_sec * 0.8 and not scheduler.decaying:
                     scheduler.start_decay(step, 0.8)
@@ -171,40 +162,12 @@ class TrainerForPreTraining:
         # TODO: Count this number after the training
         return (~batch["special_tokens_mask"].bool()).sum()
 
-    def calculate_loss(
-        self,
-        batch,
-        with_nsp: bool,
-        masked_language_modeling_output,
-        next_sentence_prediction_output = None
-    ):
-        mlm_loss = self.calculate_mlm_loss(batch, masked_language_modeling_output)
-        if with_nsp:
-            nsp_loss = self.calculate_nsp_loss(batch, next_sentence_prediction_output)
-            return mlm_loss + nsp_loss
-        else:
-            return mlm_loss
-
     def calculate_accuracies(self, batch, with_nsp: bool, masked_language_modeling_output, next_sentence_prediction_output):
         accuracies = dict()
         accuracies["mlm_acc"] = self.calculate_mlm_acc(batch, masked_language_modeling_output)
         if with_nsp:
             accuracies["nsp_acc"] = self.calculate_nsp_acc(batch, next_sentence_prediction_output)
         return accuracies
-
-    def calculate_mlm_loss(
-        self,
-        batch,
-        masked_language_modeling_output
-    ):
-        masked_tokens = batch["masked_tokens_mask"].bool()
-        masked_token_predictions = masked_language_modeling_output[masked_tokens]
-        masked_token_labels = batch["labels"][masked_tokens]
-
-        # calculate loss
-        mlm_loss = self.mlm_loss_fn(masked_token_predictions, masked_token_labels)
-
-        return mlm_loss
 
     def calculate_mlm_acc(self, batch, masked_language_modeling_output):
         masked_tokens = batch["masked_tokens_mask"].bool()
@@ -216,15 +179,6 @@ class TrainerForPreTraining:
             masked_token_predictions, masked_token_labels
         )
         return mlm_acc
-
-    def calculate_nsp_loss(self, batch, next_sentence_prediction_output):
-        next_sentence_prediction_labels = batch["labels"][..., 0]
-
-        # calculate loss
-        nsp_loss = self.nsp_loss_fn(
-            next_sentence_prediction_output, next_sentence_prediction_labels
-        )
-        return nsp_loss
 
     def calculate_nsp_acc(self, batch, next_sentence_prediction_output):
         next_sentence_prediction_labels = batch["labels"][..., 0]

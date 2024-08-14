@@ -1,15 +1,18 @@
-import time
 import torch
 from torch import nn, optim
+from datasets import Dataset
+import lightning as L
+
+from model.bert import BertConfig, BertModelForSequenceClassification
+from trainer.arguments import TrainingArguments
+from trainer.scheduler import DynamicWarmupStableDecayScheduler
+
+import wandb
+import torchmetrics
+
+import math
 from tqdm import tqdm
 from pathlib import Path
-from trainer.arguments import TrainingArguments
-from model.bert import BertConfig, BertModelForSequenceClassification
-import torchmetrics
-import wandb
-from trainer.scheduler import DynamicWarmupStableDecayScheduler
-from datasets import Dataset
-import math
 
 
 class TrainerForSequenceClassificationFinetuning:
@@ -18,11 +21,10 @@ class TrainerForSequenceClassificationFinetuning:
         self.device = self.get_device(training_args.device)
         self.verbose = verbose
         self.experiment_name = experiment_name
-        self.classification_loss_fn = nn.CrossEntropyLoss()
 
     def train(
         self,
-        model: BertModelForSequenceClassification,
+        model: L.LightningModule,
         dataset: Dataset,
         epochs: int,
     ):
@@ -52,17 +54,12 @@ class TrainerForSequenceClassificationFinetuning:
         steps_per_epoch = dataset_size // self.training_args.macro_batch_size
 
         # prepare optimizer
-        optimizer = optim.Adam(
-            model.parameters(),
-            lr=self.training_args.learning_rate,
-            betas=(self.training_args.beta1, self.training_args.beta2),
-            eps=1e-12
-        )
+        optimizer = model.configure_optimizers()
 
         # prepare scheduler
         scheduler = DynamicWarmupStableDecayScheduler(
             optimizer=optimizer,
-            lr=self.training_args.learning_rate,
+            lr=model.learning_rate,
             warmup_steps=100,
         )
 
@@ -73,25 +70,25 @@ class TrainerForSequenceClassificationFinetuning:
                 assert self.training_args.gradient_accumulation_steps > 0, "Gradient accumulation steps must be greater than 0"
                 for micro_step in range(self.training_args.gradient_accumulation_steps):
                     micro_batch = next(dataset_for_epoch)
-                    sequence_classification_output = model(**micro_batch)
+                    batch_idx = epoch * steps_per_epoch * self.training_args.gradient_accumulation_steps + step * self.training_args.gradient_accumulation_steps + micro_step
+                    print(batch_idx)
 
                     # calculate loss
-                    micro_batch_loss = self.classification_loss_fn(
-                        sequence_classification_output, micro_batch["labels"]
-                    ) / self.training_args.gradient_accumulation_steps
+                    micro_batch_loss = model.training_step(micro_batch, batch_idx) / self.training_args.gradient_accumulation_steps
                     macro_batch_loss += micro_batch_loss.item()
 
                     # do backward pass
                     micro_batch_loss.backward()
 
                     # only log if first micro_batch to reduce overhead
-                    if micro_step == 0:
-                        # calculate mlm and nsp accuracy
-                        accuracy = self.classification_accuracy(
-                            sequence_classification_output, micro_batch["labels"]
-                        )
-                        if self.training_args.with_wandb:
-                            wandb.log({"mnli": accuracy}, step=(epoch * steps_per_epoch + step))
+                    # TODO: fix this
+                    # if micro_step == 0:
+                        # calculate classification accuracy
+                        # accuracy = self.classification_accuracy(
+                        #     sequence_classification_output, micro_batch["labels"]
+                        # )
+                        # if self.training_args.with_wandb:
+                        #     wandb.log({"mnli": accuracy}, step=(epoch * steps_per_epoch + step))
 
                 # log loss and lr
                 if self.training_args.with_wandb:
