@@ -23,7 +23,7 @@ class BertModel(nn.Module):
         ])
         if self.config.add_final_layer_norm:
             self.final_layer_norm = nn.LayerNorm(
-                normalized_shape=config.d_model
+                normalized_shape=config.d_model, eps=1e-6
             )
 
     def forward(
@@ -80,7 +80,7 @@ class BertEmbedding(nn.Module):
                 embedding_dim=config.d_model,
             )
 
-        self.layer_norm = nn.LayerNorm(config.d_model)
+        self.layer_norm = nn.LayerNorm(config.d_model, eps=1e-6)
         self.embedding_dropout = nn.Dropout(config.p_embedding_dropout)
         self.with_next_sentence_prediction = config.with_next_sentence_prediction
 
@@ -144,10 +144,10 @@ class BertEncoderLayer(nn.Module):
         )
 
         self.layer_norm1 = nn.LayerNorm(
-            normalized_shape=config.d_model
+            normalized_shape=config.d_model, eps=1e-6
         )
         self.layer_norm2 = nn.LayerNorm(
-            normalized_shape=config.d_model
+            normalized_shape=config.d_model, eps=1e-6
         )
 
         self.feed_forward_dropout = nn.Dropout(config.p_feed_forward_dropout)
