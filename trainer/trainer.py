@@ -85,11 +85,17 @@ class TrainerForPreTraining:
         optimizer = model.configure_optimizers()
 
         # prepare scheduler
-        scheduler = DynamicWarmupStableDecayScheduler(
+        scheduler = optim.lr_scheduler.OneCycleLR(
             optimizer=optimizer,
-            lr=self.training_args.learning_rate,
-            warmup_steps=100,
+            max_lr=model.learning_rate,
+            total_steps=3_000
         )
+
+        # scheduler = DynamicWarmupStableDecayScheduler(
+        #     optimizer=optimizer,
+        #     lr=model.learning_rate,
+        #     warmup_steps=16,
+        # )
 
         start_time = time.time()
         if max_steps is None:
