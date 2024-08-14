@@ -1,7 +1,7 @@
 import argparse
 from trainer import TrainerForPreTraining
 from trainer.arguments import TrainingArguments
-from model import BertModel, BertConfig
+from model.bert import BertModel, BertConfig
 
 
 def train(args):
