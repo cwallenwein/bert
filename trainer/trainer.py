@@ -132,6 +132,7 @@ class TrainerForPreTraining:
                     "loss": macro_batch_loss,
                     "learning_rate": scheduler.get_last_lr()[0],
                     "step_duration": step_time,
+                    "step_duration_per_sample": step_time / self.training_args.macro_batch_size,
 
                 }, step=step)
 
