@@ -56,7 +56,7 @@ class TrainerForPreTraining:
             self.initialize_wandb(model.config, self.training_args)
 
         # prepare model
-        model = model.to(self.device)
+        model = model.to(device=self.device, dtype=self.training_args.model_dtype)
         if self.training_args.use_torch_compile and self.device != "mps":
             model = torch.compile(model)
         model.train()
