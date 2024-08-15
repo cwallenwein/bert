@@ -94,6 +94,7 @@ class TrainerForPreTraining:
             max_steps = 10**15
         for step in range(max_steps):
             macro_batch_loss = 0.0
+            step_start = time.time()
             assert self.training_args.gradient_accumulation_steps > 0, "Gradient accumulation steps must be greater than 0"
             for micro_step in range(self.training_args.gradient_accumulation_steps):
                 micro_batch = next(dataset)
@@ -109,12 +110,6 @@ class TrainerForPreTraining:
                 # count tokens in batch
                 total_tokens += self.count_tokens_in_batch(micro_batch, get_tokenizer())
 
-            # log loss and lr
-            if self.training_args.with_wandb:
-                wandb.log({
-                    "loss": macro_batch_loss,
-                    "learning_rate": scheduler.get_last_lr()[0]
-                }, step=step)
 
             # gradient accumulation
             if self.training_args.use_gradient_clipping:
@@ -129,6 +124,16 @@ class TrainerForPreTraining:
                     scheduler.start_decay(step, 0.8)
                 elif training_time_in_sec > max_time_in_sec:
                     break
+
+            # log loss, lr and step time
+            step_time = time.time() - step_start
+            if self.training_args.with_wandb:
+                wandb.log({
+                    "loss": macro_batch_loss,
+                    "learning_rate": scheduler.get_last_lr()[0],
+                    "step_duration": step_time,
+
+                }, step=step)
 
             progress_bar.set_description(f"Training loss: {macro_batch_loss: .4f}")
             progress_bar.update(1)
