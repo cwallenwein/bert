@@ -11,3 +11,4 @@ einops
 jaxtyping
 seaborn
 torchmetrics
+lightning
