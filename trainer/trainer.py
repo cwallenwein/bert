@@ -3,10 +3,9 @@ from torch import nn, optim
 from datasets import Dataset
 import lightning as L
 
-from model.bert import BertConfig, BertModelForPretraining
+from model.bert import BertConfig
 from trainer.arguments import TrainingArguments
-from trainer.scheduler import DynamicWarmupStableDecayScheduler
-from data.save_and_load import get_tokenizer
+from data.old.save_and_load import get_tokenizer
 
 import wandb
 import time
