@@ -1,7 +1,6 @@
 from transformers import PreTrainedTokenizerFast
 from datasets import Dataset
 import random
-import torch
 
 
 class IsNextDataProcessor:
@@ -79,7 +78,7 @@ class IsNextDataProcessor:
 
 if __name__ == "__main__":
     from data.util import get_dataset
-    from data.context_length_splitter import ContextLengthSplitter
+    from data.old.context_length_splitter import ContextLengthSplitter
     from transformers import BertTokenizer
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     raw_dataset = get_dataset(raw=True).select(range(2))

@@ -2,8 +2,8 @@ import torch
 import random
 from transformers import PreTrainedTokenizerFast
 from datasets import Dataset, concatenate_datasets
-from data.not_next_data_processor import NotNextDataProcessor
-from data.is_next_data_processor import IsNextDataProcessor
+from data.old.not_next_data_processor import NotNextDataProcessor
+from data.old.is_next_data_processor import IsNextDataProcessor
 
 
 class NextSentencePredictionDataProcessor:

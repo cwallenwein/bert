@@ -1,8 +1,8 @@
 from transformers import PreTrainedTokenizerFast
 from datasets import Dataset
 import random
-from data.new.dataset_tokenizer import DatasetTokenizer
-from data.new.mlm_preprocessor import MaskedLanguageModelingPreprocessor
+from data.dataset_tokenizer import DatasetTokenizer
+from data.mlm_preprocessor import MaskedLanguageModelingPreprocessor
 
 
 class BertDatasetPreprocessor:
@@ -13,7 +13,7 @@ class BertDatasetPreprocessor:
         self.context_length = context_length
 
     def preprocess(self, num_tokens: int):
-        assert num_tokens & self.context_length == 0
+        assert num_tokens % self.context_length == 0
         num_samples = num_tokens // self.context_length
 
         dataset = self.dataset.shuffle(seed=42)

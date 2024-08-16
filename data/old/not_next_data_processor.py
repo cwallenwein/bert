@@ -20,10 +20,10 @@ class NewSampleInfo:
         len_second_half = sum(self.sentence_lengths_second_half[self.indices_second_half])
         return len_first_half + len_second_half
 
-# TODO: change the dtype to int 16 if the tokenizer has a vocab_size < 65k
-# TODO: otherwise: int32
-class NotNextDataProcessor:
 
+class NotNextDataProcessor:
+    # TODO: change the dtype to int 16 if the tokenizer has a vocab_size < 65k
+    # TODO: otherwise: int32
     def __init__(self, tokenizer: PreTrainedTokenizerFast, dataset: Dataset):
         assert dataset.column_names == ["input_ids"]
         self.dataset = dataset

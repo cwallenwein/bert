@@ -46,6 +46,7 @@ class DatasetTokenizer:
             remove_columns=self.dataset.column_names,
             desc="Tokenizing dataset",
             num_proc=num_proc,
+            keep_in_memory=True,
             fn_kwargs={
                 "context_length": context_length
             },

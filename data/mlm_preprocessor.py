@@ -59,6 +59,7 @@ class MaskedLanguageModelingPreprocessor:
             batch_size=batch_size,
             desc="Masking dataset",
             num_proc=num_proc,
+            keep_in_memory=True,
             features=Features({
                 "attention_mask": Sequence(feature=Value(dtype="bool", id=None), length=context_length, id=None),
                 "input_ids": Sequence(feature=Value(dtype="int16", id=None), length=context_length, id=None),
