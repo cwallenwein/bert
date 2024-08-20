@@ -33,6 +33,7 @@ class BertModel(nn.Module):
         attention_mask: Float[Tensor, "batch sequence_length"],
         **kwargs
     ):
+        # TODO: define default token_type_ids and attention_mask
 
         x = self.embedding(
             input_ids=input_ids,
@@ -80,8 +81,8 @@ class BertEmbedding(nn.Module):
                 embedding_dim=config.d_model,
             )
 
-        self.layer_norm = nn.LayerNorm(config.d_model, eps=1e-6)
         self.embedding_dropout = nn.Dropout(config.p_embedding_dropout)
+        self.layer_norm = nn.LayerNorm(config.d_model, eps=1e-6)
         self.with_next_sentence_prediction = config.with_next_sentence_prediction
 
         self._init_weights()
@@ -102,8 +103,8 @@ class BertEmbedding(nn.Module):
             segment_embeddings = self.segment_embedding_matrix(segment_ids)
             x += segment_embeddings
 
-        x = self.layer_norm(x)
         x = self.embedding_dropout(x)
+        x = self.layer_norm(x)
         return x
 
     def _init_weights(self):
