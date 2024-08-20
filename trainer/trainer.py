@@ -163,7 +163,8 @@ class TrainerForPreTraining:
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
             "step": step,
-            "macro_batch_size": self.training_args.macro_batch_size
+            "macro_batch_size": self.training_args.macro_batch_size,
+            "config": model.config
         }, checkpoint_path)
         print(f"Saved training state to {checkpoint_path}")
 
