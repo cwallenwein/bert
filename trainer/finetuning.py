@@ -88,7 +88,7 @@ class TrainerForSequenceClassificationFinetuning:
                 scheduler.step()
 
                 progress = (epoch * steps_per_epoch + step) / (epochs * steps_per_epoch)
-                if progress >= 0.8 and not scheduler.decaying:
+                if progress >= 0.8 and hasattr(scheduler, "decaying") and hasattr(scheduler, "start_decay") and not scheduler.decaying:
                     scheduler.start_decay(step, 0.8)
 
         if self.training_args.with_wandb:
