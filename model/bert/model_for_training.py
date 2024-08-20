@@ -13,7 +13,7 @@ from torch import Tensor
 class BertModelForPretraining(L.LightningModule):
     # TODO: implement and test flash attention
     # TODO: add an option for weight tying to the config
-    def __init__(self, config: BertConfig, learning_rate: float):
+    def __init__(self, config: BertConfig, learning_rate: float = 1e-4):
         super().__init__()
         self.config: BertConfig = config
         self.bert = BertModel(config)
@@ -116,7 +116,7 @@ class BertModelForPretraining(L.LightningModule):
 
 class BertModelForSequenceClassification(L.LightningModule):
 
-    def __init__(self, pretrained_model: L.LightningModule, num_classes: int, learning_rate: float):
+    def __init__(self, pretrained_model: L.LightningModule, num_classes: int, learning_rate: float = 1e-4):
         super().__init__()
         self.config = pretrained_model.config
         self.learning_rate = learning_rate
