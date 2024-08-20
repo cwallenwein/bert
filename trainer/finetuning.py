@@ -48,11 +48,17 @@ class TrainerForSequenceClassificationFinetuning:
         optimizer = model.configure_optimizers()
 
         # prepare scheduler
-        scheduler = DynamicWarmupStableDecayScheduler(
+        scheduler = optim.lr_scheduler.OneCycleLR(
             optimizer=optimizer,
-            lr=model.learning_rate,
-            warmup_steps=100,
+            max_lr=model.learning_rate,
+            total_steps=122_719
         )
+
+        # scheduler = DynamicWarmupStableDecayScheduler(
+        #     optimizer=optimizer,
+        #     lr=model.learning_rate,
+        #     warmup_steps=100,
+        # )
 
         for epoch in tqdm(range(epochs)):
             dataset_for_epoch = dataset.iter(batch_size=self.training_args.micro_batch_size)
