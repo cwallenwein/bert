@@ -116,7 +116,13 @@ class BertModelForPretraining(L.LightningModule):
 
 class BertModelForSequenceClassification(L.LightningModule):
 
-    def __init__(self, pretrained_model: L.LightningModule, num_classes: int, learning_rate: float = 1e-4):
+    def __init__(
+        self,
+        pretrained_model: BertModel,
+        num_classes: int,
+        learning_rate: float = 1e-4,
+        p_dropout: float = 0.1
+    ):
         super().__init__()
         self.config = pretrained_model.config
         self.learning_rate = learning_rate
@@ -135,6 +141,11 @@ class BertModelForSequenceClassification(L.LightningModule):
         # freeze bert
         for param in self.bert.parameters():
             param.requires_grad = False
+
+        # update dropout probabilities
+        for module in self.bert.modules():
+            if isinstance(module, nn.Dropout):
+                module.p = p_dropout
 
     def forward(
             self,
