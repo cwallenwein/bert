@@ -3,7 +3,7 @@ from torch import nn, optim
 from datasets import Dataset
 import lightning as L
 
-from model.bert import BertConfig, BertModelForSequenceClassification
+from model.bert import BertConfig
 from trainer.arguments import TrainingArguments
 from trainer.scheduler import DynamicWarmupStableDecayScheduler
 
@@ -57,26 +57,22 @@ class TrainerForSequenceClassificationFinetuning:
         for epoch in tqdm(range(epochs)):
             dataset_for_epoch = dataset.iter(batch_size=self.training_args.micro_batch_size)
             for step in tqdm(range(steps)):
-                macro_batch_loss = 0.0
-                assert self.training_args.gradient_accumulation_steps > 0, "Gradient accumulation steps must be greater than 0"
-                for micro_step in range(self.training_args.gradient_accumulation_steps):
-                    micro_batch = next(dataset_for_epoch)
+                batch = next(dataset_for_epoch)
+                batch_idx = epoch * steps_per_epoch + step
 
-                    batch_idx = epoch * steps_per_epoch * self.training_args.gradient_accumulation_steps + step * self.training_args.gradient_accumulation_steps + micro_step
+                # calculate loss
+                loss, metrics = model.training_step(batch, batch_idx)
 
-                    # calculate loss
-                    micro_batch_loss = model.training_step(micro_batch, batch_idx, step, micro_step, wandb) / self.training_args.gradient_accumulation_steps
-                    macro_batch_loss += micro_batch_loss.item()
-
-                    # do backward pass
-                    micro_batch_loss.backward()
+                # do backward pass
+                loss.backward()
 
                 # log loss and lr
                 if self.training_args.with_wandb:
-                    wandb.log({
-                        "loss": macro_batch_loss,
+                    metrics = metrics | {
+                        "loss": loss.item(),
                         "learning_rate": scheduler.get_last_lr()[0]
-                    }, step=epoch * steps_per_epoch + step)
+                    }
+                    wandb.log(metrics, step=batch_idx)
 
                 # gradient accumulation
                 if self.training_args.use_gradient_clipping:

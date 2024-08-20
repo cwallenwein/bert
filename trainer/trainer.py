@@ -100,7 +100,11 @@ class TrainerForPreTraining:
 
                 # calculate loss
                 batch_idx = step*self.training_args.gradient_accumulation_steps+micro_step
-                micro_batch_loss = model.training_step(micro_batch, batch_idx, step, micro_step, wandb) / self.training_args.gradient_accumulation_steps
+                # for now, the metrics are calculated every micro batch, but only logged every macro batch.
+                # TODO: either calculate the metrics less frequently or log more frequently
+                micro_batch_loss, metrics = model.training_step(micro_batch, batch_idx)
+                # adjust loss/gradient to accumulation steps
+                micro_batch_loss /= self.training_args.gradient_accumulation_steps
                 macro_batch_loss += micro_batch_loss.item()
 
                 # do backward pass
@@ -127,13 +131,14 @@ class TrainerForPreTraining:
             # log loss, lr and step time
             step_time = time.time() - step_start
             if self.training_args.with_wandb:
-                wandb.log({
+                metrics = metrics | {
                     "loss": macro_batch_loss,
                     "learning_rate": scheduler.get_last_lr()[0],
                     "step_duration": step_time,
                     "step_duration_per_sample": step_time / self.training_args.macro_batch_size,
 
-                }, step=step)
+                }
+                wandb.log(metrics, step=step)
 
             progress_bar.set_description(f"Training loss: {macro_batch_loss: .4f}")
             progress_bar.update(1)

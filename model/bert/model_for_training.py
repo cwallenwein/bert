@@ -61,13 +61,10 @@ class BertModelForPretraining(L.LightningModule):
         else:
             return mlm_output, None
 
-    def training_step(self, batch, batch_idx, step, micro_step, wandb):
+    def training_step(self, batch, batch_idx):
         masked_language_modeling_output, next_sentence_prediction_output = self(**batch)
 
-        # only log if first micro_batch to reduce overhead
-        if micro_step == 0:
-            metrics = self.calculate_metrics(batch, masked_language_modeling_output, next_sentence_prediction_output)
-            wandb.log(metrics, step=step)
+        metrics = self.calculate_metrics(batch, masked_language_modeling_output, next_sentence_prediction_output)
 
         masked_tokens = batch["masked_tokens_mask"]
         masked_token_predictions = masked_language_modeling_output
@@ -80,9 +77,9 @@ class BertModelForPretraining(L.LightningModule):
             nsp_loss = self.nsp_loss_fn(
                 next_sentence_prediction_output, next_sentence_prediction_labels
             )
-            return mlm_loss + nsp_loss
+            return mlm_loss + nsp_loss, metrics
         else:
-            return mlm_loss
+            return mlm_loss, metrics
 
     def configure_optimizers(self):
         optimizer = optim.Adam(
@@ -155,19 +152,16 @@ class BertModelForSequenceClassification(L.LightningModule):
         )
         return classification_output.squeeze(-1)
 
-    def training_step(self, batch, batch_idx, step, micro_step, wandb):
+    def training_step(self, batch, batch_idx):
         sequence_classification_output = self(**batch)
 
         classification_loss = self.classification_loss_fn(
             sequence_classification_output, batch["labels"]
         )
 
-        # only log if first micro_batch to reduce overhead
-        if micro_step == 0:
-            metrics = self.calculate_metrics(batch, sequence_classification_output)
-            wandb.log(metrics, step=step)
+        metrics = self.calculate_metrics(batch, sequence_classification_output)
 
-        return classification_loss
+        return classification_loss, metrics
 
     def configure_optimizers(self):
         optimizer = optim.Adam(
