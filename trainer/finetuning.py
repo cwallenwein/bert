@@ -48,12 +48,17 @@ class TrainerForSequenceClassificationFinetuning:
         optimizer = model.configure_optimizers()
 
         # prepare scheduler
-        scheduler = optim.lr_scheduler.OneCycleLR(
-            optimizer=optimizer,
-            max_lr=model.learning_rate,
-            total_steps=122_719
-        )
+        total_steps = math.ceil((len(dataset) * epochs) / self.training_args.micro_batch_size)
 
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer=optimizer,
+            T_max=total_steps
+        )
+        # scheduler = optim.lr_scheduler.OneCycleLR(
+        #     optimizer=optimizer,
+        #     max_lr=model.learning_rate,
+        #     total_steps=total_steps
+        # )
         # scheduler = DynamicWarmupStableDecayScheduler(
         #     optimizer=optimizer,
         #     lr=model.learning_rate,
