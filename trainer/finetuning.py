@@ -155,7 +155,6 @@ class TrainerForSequenceClassificationFinetuning:
         wandb.define_metric("val/epoch", step_metric="val/step")
         wandb.define_metric("val/loss", step_metric="val/step")
         wandb.define_metric("val/accuracy", step_metric="val/epoch")
-        wandb.define_metric("val/learning_rate", step_metric="val/step")
 
         assert run.name is not None
         return run.name
