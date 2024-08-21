@@ -51,10 +51,10 @@ class TrainerForSequenceClassificationFinetuning:
         # prepare optimizer and scheduler
         optimizer, scheduler = model.configure_optimizers(training_steps_total)
 
-        for epoch in tqdm(range(epochs)):
+        for epoch in tqdm(range(epochs), desc="Training epochs"):
             model.train()
             iterable_training_dataset = training_dataset.iter(batch_size=self.training_args.micro_batch_size)
-            for training_step, training_batch in tqdm(enumerate(iterable_training_dataset), total=training_steps_per_epoch):
+            for training_step, training_batch in tqdm(enumerate(iterable_training_dataset), total=training_steps_per_epoch, desc="Training steps"):
 
                 # calculate loss and metrics
                 loss, metrics = model.training_step(training_batch, batch_idx=training_step)
@@ -89,7 +89,7 @@ class TrainerForSequenceClassificationFinetuning:
             with torch.no_grad():
                 total_validation_accuracy = 0.
                 iterable_validation_dataset = validation_dataset.iter(batch_size=self.training_args.micro_batch_size)
-                for validation_step, validation_batch in tqdm(enumerate(iterable_validation_dataset), total=validation_steps_per_epoch):
+                for validation_step, validation_batch in tqdm(enumerate(iterable_validation_dataset), total=validation_steps_per_epoch, desc="Validation steps"):
 
                     validation_loss, validation_metrics = model.validation_step(validation_batch, batch_idx=validation_step)
 
