@@ -59,7 +59,7 @@ def load_pretrained_model(wandb_run_name: str) -> BertModel:
         p_feed_forward_dropout=0.1,
     )
 
-    model = BertModelForPretraining(config, learning_rate=0.00087)
+    model = BertModelForPretraining(config)
 
     if torch.cuda.is_available():
         checkpoint = torch.load(f"experiments/{wandb_run_name}/checkpoint.pt")
@@ -110,8 +110,8 @@ def main():
     parser.add_argument("--wandb_run_name", type=str)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--scheduler", type=str, default="CosineAnnealingLR")
-    parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--p_dropout", type=float, default=0.1)
+    parser.add_argument("--epochs", type=int, default=5)
 
     args = parser.parse_args()
     finetune(**args.__dict__)

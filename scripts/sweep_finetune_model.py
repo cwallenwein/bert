@@ -4,16 +4,14 @@ from functools import partial
 from scripts.finetune_model import finetune
 
 
-def start_finetuning_sweep(wandb_run_name: str):
+def start_finetuning_sweep(wandb_run_name: str, num_runs: int = 8):
     sweep_config = {
         "method": "random",
-        "name": "BERT",
         "metric": {
             "goal": "maximize",
-            "name": "val/acc"
+            "name": "val/accuracy"
         },
         "parameters": {
-            "wandb_run_name": {"value": wandb_run_name},
             "learning_rate": {"min": 1e-5, "max": 1e-2},
             "scheduler": {"values": [
                 "CosineAnnealingLR", "OneCycleLR", "DynamicWarmupStableDecayScheduler"
@@ -22,9 +20,12 @@ def start_finetuning_sweep(wandb_run_name: str):
         }
     }
 
-    sweep_function = partial(finetune, wandb_run_name=wandb_run_name)
-    sweep_id = wandb.sweep(sweep_config, project="test_sweep")
-    wandb.agent(sweep_id=sweep_id, function=sweep_function, count=5)
+    def sweep_function():
+        wandb.init()
+        finetune(wandb_run_name=wandb_run_name, **wandb.config)
+
+    sweep_id = wandb.sweep(sweep_config, project="BERT")
+    wandb.agent(sweep_id=sweep_id, function=sweep_function, count=num_runs)
 
 
 def main():
@@ -33,6 +34,7 @@ def main():
 
     # Finetuning arguments
     parser.add_argument("--wandb_run_name", type=str, required=True)
+    parser.add_argument("--num_runs", type=int, default=8)
 
     args = parser.parse_args()
     start_finetuning_sweep(**args.__dict__)
