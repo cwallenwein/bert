@@ -14,6 +14,7 @@ from pathlib import Path
 
 
 class TrainerForSequenceClassificationFinetuning:
+    # TODO: define name of run to be name of run for the pretraining+ _finetuning_glue_mnli
     def __init__(self, experiment_name: str, training_args: TrainingArguments, verbose: bool = True):
         self.training_args = training_args
         self.device = self.get_device(training_args.device)
@@ -23,7 +24,8 @@ class TrainerForSequenceClassificationFinetuning:
     def train(
         self,
         model: L.LightningModule,
-        dataset: Dataset,
+        training_dataset: Dataset,
+        validation_dataset: Dataset,
         epochs: int,
     ):
 
@@ -35,24 +37,25 @@ class TrainerForSequenceClassificationFinetuning:
         model = model.to(device=self.device, dtype=self.training_args.model_dtype)
         if self.training_args.use_torch_compile and self.device != "mps":
             model = torch.compile(model)
-        model.train()
-
-        dataset_size = len(dataset)
-        steps = math.ceil(dataset_size / self.training_args.macro_batch_size)
 
         # prepare dataset
-        dataset.set_format("torch", device=self.device)
-        steps_per_epoch = dataset_size // self.training_args.macro_batch_size
+        training_dataset.set_format("torch", device=self.device)
+        training_dataset_size = len(training_dataset)
+        training_steps_per_epoch = math.ceil(training_dataset_size / self.training_args.macro_batch_size)
+        training_steps_total = training_steps_per_epoch * epochs
+
+        validation_dataset.set_format("torch", device=self.device)
+        validation_dataset_size = len(validation_dataset)
+        validation_steps_per_epoch = math.ceil(validation_dataset_size / self.training_args.micro_batch_size)
+        validation_steps_total = validation_steps_per_epoch * epochs
 
         # prepare optimizer
         optimizer = model.configure_optimizers()
 
         # prepare scheduler
-        total_steps = math.ceil((len(dataset) * epochs) / self.training_args.micro_batch_size)
-
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer=optimizer,
-            T_max=total_steps
+            T_max=training_steps_total
         )
         # scheduler = optim.lr_scheduler.OneCycleLR(
         #     optimizer=optimizer,
@@ -65,14 +68,15 @@ class TrainerForSequenceClassificationFinetuning:
         #     warmup_steps=100,
         # )
 
+        validation_global_step = 0
+        training_global_step = 0
         for epoch in tqdm(range(epochs)):
-            dataset_for_epoch = dataset.iter(batch_size=self.training_args.micro_batch_size)
-            for step in tqdm(range(steps)):
-                batch = next(dataset_for_epoch)
-                batch_idx = epoch * steps_per_epoch + step
+            model.train()
+            iterable_training_dataset = training_dataset.iter(batch_size=self.training_args.micro_batch_size)
+            for training_step, training_batch in tqdm(enumerate(iterable_training_dataset), total=training_steps_per_epoch):
 
-                # calculate loss
-                loss, metrics = model.training_step(batch, batch_idx)
+                # calculate loss and metrics
+                loss, metrics = model.training_step(training_batch, batch_idx=training_step)
 
                 # do backward pass
                 loss.backward()
@@ -80,10 +84,12 @@ class TrainerForSequenceClassificationFinetuning:
                 # log loss and lr
                 if self.training_args.with_wandb:
                     metrics = metrics | {
-                        "loss": loss.item(),
-                        "learning_rate": scheduler.get_last_lr()[0]
+                        "train/loss": loss.item(),
+                        "train/learning_rate": scheduler.get_last_lr()[0],
+                        "train/step": training_global_step,
+                        "train/epoch": epoch
                     }
-                    wandb.log(metrics, step=batch_idx)
+                    wandb.log(metrics)
 
                 # gradient accumulation
                 if self.training_args.use_gradient_clipping:
@@ -92,23 +98,49 @@ class TrainerForSequenceClassificationFinetuning:
                 optimizer.zero_grad()
                 scheduler.step()
 
-                progress = (epoch * steps_per_epoch + step) / (epochs * steps_per_epoch)
+                progress = training_global_step / training_steps_total
                 if progress >= 0.8 and hasattr(scheduler, "decaying") and hasattr(scheduler, "start_decay") and not scheduler.decaying:
-                    scheduler.start_decay(step, 0.8)
+                    scheduler.start_decay(training_step, 0.8)
+
+                training_global_step += 1
+
+            # measure validation metrics
+            model.eval()
+            with torch.no_grad():
+                total_validation_accuracy = 0.
+                iterable_validation_dataset = validation_dataset.iter(batch_size=self.training_args.micro_batch_size)
+                for validation_step, validation_batch in tqdm(enumerate(iterable_validation_dataset), total=validation_steps_per_epoch):
+
+                    validation_loss, validation_metrics = model.validation_step(validation_batch, batch_idx=validation_step)
+
+                    if self.training_args.with_wandb:
+                        wandb.log({"val/loss": validation_loss, "val/step": validation_global_step, "val/epoch": epoch})
+
+                    # get average over accuracy
+                    total_validation_accuracy += validation_metrics["val/accuracy"]
+
+                    validation_global_step += 1
+
+                avg_validation_accuracy = total_validation_accuracy / validation_steps_per_epoch
+
+                # log validation metrics
+                if self.training_args.with_wandb:
+                    wandb.log({"val/accuracy": avg_validation_accuracy, "val/epoch": epoch})
 
         if self.training_args.with_wandb:
             wandb.finish()
 
         if self.training_args.save_model_after_training:
-            self.save_checkpoint(model, optimizer, self.experiment_name, step=dataset_size * epochs)
+            self.save_checkpoint(model, optimizer, self.experiment_name, epoch=epoch, step=training_dataset_size)
 
-    def save_checkpoint(self, model: nn.Module, optimizer: optim.Optimizer, experiment_name: str, step: int):
+    def save_checkpoint(self, model: nn.Module, optimizer: optim.Optimizer, experiment_name: str, epoch: int, step: int):
         experiment_path = Path(__file__).parent.parent / "experiments" / experiment_name
         experiment_path.mkdir(exist_ok=True, parents=True)
         checkpoint_path = experiment_path / "checkpoint.pt"
         torch.save({
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
+            "epoch": epoch,
             "step": step,
             "macro_batch_size": self.training_args.macro_batch_size,
             "config": model.config
@@ -125,7 +157,7 @@ class TrainerForSequenceClassificationFinetuning:
 
     @staticmethod
     def initialize_wandb(model_config: BertConfig, training_args: TrainingArguments):
-        wandb.init(
+        run = wandb.init(
             project="BERT",
             job_type="finetuning",
             dir="..",
@@ -133,5 +165,9 @@ class TrainerForSequenceClassificationFinetuning:
                 "model": model_config.__dict__,
                 "training_args": training_args.__dict__,
             },
-
+            tags=["mnli"]
         )
+        print(run.name)
+
+        wandb.define_metric("epoch")
+        wandb.define_metric("val/accuracy", step_metric="epoch")

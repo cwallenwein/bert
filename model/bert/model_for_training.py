@@ -170,7 +170,18 @@ class BertModelForSequenceClassification(L.LightningModule):
             sequence_classification_output, batch["labels"]
         )
 
-        metrics = self.calculate_metrics(batch, sequence_classification_output)
+        metrics = self.calculate_metrics(sequence_classification_output, batch["labels"], prefix="train")
+
+        return classification_loss, metrics
+
+    def validation_step(self, batch, batch_idx):
+        sequence_classification_output = self(**batch)
+
+        classification_loss = self.classification_loss_fn(
+            sequence_classification_output, batch["labels"]
+        )
+
+        metrics = self.calculate_metrics(sequence_classification_output, batch["labels"], prefix="val")
 
         return classification_loss, metrics
 
@@ -183,9 +194,9 @@ class BertModelForSequenceClassification(L.LightningModule):
         )
         return optimizer
 
-    def calculate_metrics(self, batch, sequence_classification_output):
+    def calculate_metrics(self, sequence_classification_output, labels, prefix="train"):
         accuracy = self.classification_accuracy(
-            sequence_classification_output, batch["labels"]
+            sequence_classification_output, labels
         )
-        metrics = {"mnli": accuracy}
+        metrics = {f"{prefix}/accuracy": accuracy}
         return metrics
