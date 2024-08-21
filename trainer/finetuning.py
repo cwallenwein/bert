@@ -145,8 +145,17 @@ class TrainerForSequenceClassificationFinetuning:
             tags=["mnli"]
         )
 
-        wandb.define_metric("epoch")
-        wandb.define_metric("val/accuracy", step_metric="epoch")
+        wandb.define_metric("train/step")
+        wandb.define_metric("train/epoch", step_metric="train/step")
+        wandb.define_metric("train/loss", step_metric="train/step")
+        wandb.define_metric("train/accuracy", step_metric="train/step")
+        wandb.define_metric("train/learning_rate", step_metric="train/step")
+
+        wandb.define_metric("val/step")
+        wandb.define_metric("val/epoch", step_metric="val/step")
+        wandb.define_metric("val/loss", step_metric="val/step")
+        wandb.define_metric("val/accuracy", step_metric="val/epoch")
+        wandb.define_metric("val/learning_rate", step_metric="val/step")
 
         assert run.name is not None
         return run.name
