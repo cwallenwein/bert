@@ -7,6 +7,7 @@ class GatedLinearUnit(torch.nn.Module):
         super().__init__()
 
     @staticmethod
-    def forward(self, inputs):
+    def forward(inputs):
         x, gate = inputs.chunk(2, dim=-1)
+        # in cramming this is not F.sigmoid but nn.GELU
         return x * F.sigmoid(gate)
