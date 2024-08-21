@@ -7,7 +7,7 @@ from scripts.finetune_model import finetune
 def start_finetuning_sweep(wandb_run_name: str):
     sweep_config = {
         "method": "random",
-        "name": "sweep_test",
+        "name": "BERT",
         "metric": {
             "goal": "maximize",
             "name": "val/acc"
