@@ -21,11 +21,10 @@ class TrainerForPreTraining:
     # TODO: log total wallclock time
     # TODO: log flops / utilization
     # TODO: add lr for max_steps (currently only supported for max_time_in_min)
-    def __init__(self, experiment_name: str, training_args: TrainingArguments, verbose: bool = True):
+    def __init__(self, training_args: TrainingArguments, verbose: bool = True):
         self.training_args = training_args
         self.device = self.get_device(training_args.device)
         self.verbose = verbose
-        self.experiment_name = experiment_name
 
     def train(
         self,
@@ -51,8 +50,7 @@ class TrainerForPreTraining:
         max_time_in_sec = None if max_time_in_min is None else max_time_in_min * 60
 
         # initialize logging
-        if self.training_args.with_wandb:
-            self.initialize_wandb(model.config, self.training_args)
+        experiment_name = self.initialize_wandb(model.config, self.training_args)
 
         # prepare model
         model = model.to(device=self.device, dtype=self.training_args.model_dtype)
@@ -67,21 +65,8 @@ class TrainerForPreTraining:
             assert num_training_samples <= len(dataset), "Not enough samples in dataset for training steps"
         dataset = dataset.iter(batch_size=self.training_args.micro_batch_size)
 
-        # prepare optimizer
-        optimizer = model.configure_optimizers()
-
-        # prepare scheduler
-        scheduler = optim.lr_scheduler.OneCycleLR(
-            optimizer=optimizer,
-            max_lr=model.learning_rate,
-            total_steps=3_000
-        )
-
-        # scheduler = DynamicWarmupStableDecayScheduler(
-        #     optimizer=optimizer,
-        #     lr=model.learning_rate,
-        #     warmup_steps=16,
-        # )
+        # prepare optimizer & scheduler
+        optimizer, scheduler = model.configure_optimizers()
 
         start_time = time.time()
         if max_steps is None:
@@ -130,25 +115,25 @@ class TrainerForPreTraining:
 
             # log loss, lr and step time
             step_time = time.time() - step_start
-            if self.training_args.with_wandb:
-                metrics = metrics | {
-                    "loss": macro_batch_loss,
-                    "learning_rate": scheduler.get_last_lr()[0],
-                    "step_duration": step_time,
-                    "step_duration_per_sample": step_time / self.training_args.macro_batch_size,
 
-                }
-                wandb.log(metrics, step=step)
+            metrics = metrics | {
+                "loss": macro_batch_loss,
+                "learning_rate": scheduler.get_last_lr()[0],
+                "step_duration": step_time,
+                "step_duration_per_sample": step_time / self.training_args.macro_batch_size,
+
+            }
+            wandb.log(metrics, step=step)
 
             progress_bar.set_description(f"Training loss: {macro_batch_loss: .4f}")
             progress_bar.update(1)
 
         progress_bar.close()
-        if self.training_args.with_wandb:
-            wandb.finish()
+
+        wandb.finish()
 
         if self.training_args.save_model_after_training:
-            self.save_checkpoint(model, optimizer, self.experiment_name, step=max_steps)
+            self.save_checkpoint(model, optimizer, experiment_name, step=max_steps)
 
     @staticmethod
     def count_tokens_in_batch(batch, tokenizer):
@@ -177,8 +162,8 @@ class TrainerForPreTraining:
         return "cpu"
 
     @staticmethod
-    def initialize_wandb(model_config: BertConfig, training_args: TrainingArguments):
-        wandb.init(
+    def initialize_wandb(model_config: BertConfig, training_args: TrainingArguments) -> str:
+        run = wandb.init(
             project="BERT",
             job_type="pretraining",
             dir="..",
@@ -187,3 +172,6 @@ class TrainerForPreTraining:
                 "training_args": training_args.__dict__,
             }
         )
+
+        assert run.name is not None
+        return run.name

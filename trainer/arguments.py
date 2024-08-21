@@ -8,7 +8,6 @@ class TrainingArguments:
     macro_batch_size: int
     device: str = "mps"
     save_model_after_training: bool = True
-    with_wandb: bool = True
     use_torch_compile: bool = True
     use_gradient_clipping: bool = True
     gradient_clipping_value: float = 0.5

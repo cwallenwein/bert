@@ -5,7 +5,6 @@ import lightning as L
 
 from model.bert import BertConfig
 from trainer.arguments import TrainingArguments
-from trainer.scheduler import DynamicWarmupStableDecayScheduler
 
 import wandb
 import math
@@ -15,11 +14,10 @@ from pathlib import Path
 
 class TrainerForSequenceClassificationFinetuning:
     # TODO: define name of run to be name of run for the pretraining+ _finetuning_glue_mnli
-    def __init__(self, experiment_name: str, training_args: TrainingArguments, verbose: bool = True):
+    def __init__(self, training_args: TrainingArguments, verbose: bool = True):
         self.training_args = training_args
         self.device = self.get_device(training_args.device)
         self.verbose = verbose
-        self.experiment_name = experiment_name
 
     def train(
         self,
@@ -30,8 +28,7 @@ class TrainerForSequenceClassificationFinetuning:
     ):
 
         # initialize logging
-        if self.training_args.with_wandb:
-            self.initialize_wandb(model.config, self.training_args)
+        experiment_name = self.initialize_wandb(model.config, self.training_args)
 
         # prepare model
         model = model.to(device=self.device, dtype=self.training_args.model_dtype)
@@ -43,33 +40,17 @@ class TrainerForSequenceClassificationFinetuning:
         training_dataset_size = len(training_dataset)
         training_steps_per_epoch = math.ceil(training_dataset_size / self.training_args.macro_batch_size)
         training_steps_total = training_steps_per_epoch * epochs
+        training_global_step = 0
 
         validation_dataset.set_format("torch", device=self.device)
         validation_dataset_size = len(validation_dataset)
         validation_steps_per_epoch = math.ceil(validation_dataset_size / self.training_args.micro_batch_size)
         validation_steps_total = validation_steps_per_epoch * epochs
-
-        # prepare optimizer
-        optimizer = model.configure_optimizers()
-
-        # prepare scheduler
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer=optimizer,
-            T_max=training_steps_total
-        )
-        # scheduler = optim.lr_scheduler.OneCycleLR(
-        #     optimizer=optimizer,
-        #     max_lr=model.learning_rate,
-        #     total_steps=total_steps
-        # )
-        # scheduler = DynamicWarmupStableDecayScheduler(
-        #     optimizer=optimizer,
-        #     lr=model.learning_rate,
-        #     warmup_steps=100,
-        # )
-
         validation_global_step = 0
-        training_global_step = 0
+
+        # prepare optimizer and scheduler
+        optimizer, scheduler = model.configure_optimizers(training_steps_total)
+
         for epoch in tqdm(range(epochs)):
             model.train()
             iterable_training_dataset = training_dataset.iter(batch_size=self.training_args.micro_batch_size)
@@ -82,14 +63,13 @@ class TrainerForSequenceClassificationFinetuning:
                 loss.backward()
 
                 # log loss and lr
-                if self.training_args.with_wandb:
-                    metrics = metrics | {
-                        "train/loss": loss.item(),
-                        "train/learning_rate": scheduler.get_last_lr()[0],
-                        "train/step": training_global_step,
-                        "train/epoch": epoch
-                    }
-                    wandb.log(metrics)
+                metrics = metrics | {
+                    "train/loss": loss.item(),
+                    "train/learning_rate": scheduler.get_last_lr()[0],
+                    "train/step": training_global_step,
+                    "train/epoch": epoch
+                }
+                wandb.log(metrics)
 
                 # gradient accumulation
                 if self.training_args.use_gradient_clipping:
@@ -113,8 +93,7 @@ class TrainerForSequenceClassificationFinetuning:
 
                     validation_loss, validation_metrics = model.validation_step(validation_batch, batch_idx=validation_step)
 
-                    if self.training_args.with_wandb:
-                        wandb.log({"val/loss": validation_loss, "val/step": validation_global_step, "val/epoch": epoch})
+                    wandb.log({"val/loss": validation_loss, "val/step": validation_global_step, "val/epoch": epoch})
 
                     # get average over accuracy
                     total_validation_accuracy += validation_metrics["val/accuracy"]
@@ -124,14 +103,12 @@ class TrainerForSequenceClassificationFinetuning:
                 avg_validation_accuracy = total_validation_accuracy / validation_steps_per_epoch
 
                 # log validation metrics
-                if self.training_args.with_wandb:
-                    wandb.log({"val/accuracy": avg_validation_accuracy, "val/epoch": epoch})
+                wandb.log({"val/accuracy": avg_validation_accuracy, "val/epoch": epoch})
 
-        if self.training_args.with_wandb:
-            wandb.finish()
+        wandb.finish()
 
         if self.training_args.save_model_after_training:
-            self.save_checkpoint(model, optimizer, self.experiment_name, epoch=epoch, step=training_dataset_size)
+            self.save_checkpoint(model, optimizer, experiment_name, epoch=epochs, step=training_dataset_size)
 
     def save_checkpoint(self, model: nn.Module, optimizer: optim.Optimizer, experiment_name: str, epoch: int, step: int):
         experiment_path = Path(__file__).parent.parent / "experiments" / experiment_name
@@ -156,7 +133,7 @@ class TrainerForSequenceClassificationFinetuning:
         return "cpu"
 
     @staticmethod
-    def initialize_wandb(model_config: BertConfig, training_args: TrainingArguments):
+    def initialize_wandb(model_config: BertConfig, training_args: TrainingArguments) -> str:
         run = wandb.init(
             project="BERT",
             job_type="finetuning",
@@ -167,7 +144,9 @@ class TrainerForSequenceClassificationFinetuning:
             },
             tags=["mnli"]
         )
-        print(run.name)
 
         wandb.define_metric("epoch")
         wandb.define_metric("val/accuracy", step_metric="epoch")
+
+        assert run.name is not None
+        return run.name

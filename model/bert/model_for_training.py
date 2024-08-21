@@ -4,6 +4,7 @@ from model.bert.config import BertConfig
 from model.bert.model import BertModel
 import lightning as L
 import torchmetrics
+from trainer.scheduler import DynamicWarmupStableDecayScheduler
 
 # Typehints
 from jaxtyping import Float
@@ -13,11 +14,19 @@ from torch import Tensor
 class BertModelForPretraining(L.LightningModule):
     # TODO: implement and test flash attention
     # TODO: add an option for weight tying to the config
-    def __init__(self, config: BertConfig, learning_rate: float = 1e-4):
+    def __init__(
+        self,
+        config: BertConfig,
+        learning_rate: float = 1e-4,
+        scheduler: str = "OneCycleLR"
+    ):
         super().__init__()
         self.config: BertConfig = config
         self.bert = BertModel(config)
         self.learning_rate = learning_rate
+
+        assert scheduler in ["OneCycleLR", "DynamicWarmupStableDecayScheduler"]
+        self.scheduler = scheduler
 
         # masked language modeling
         self.masked_language_modeling_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
@@ -88,7 +97,23 @@ class BertModelForPretraining(L.LightningModule):
             betas=(0.9, 0.999),
             eps=1e-12
         )
-        return optimizer
+
+        if self.scheduler == "OneCycleLR":
+            scheduler = optim.lr_scheduler.OneCycleLR(
+                optimizer=optimizer,
+                max_lr=self.learning_rate,
+                total_steps=3_000
+            )
+        elif self.scheduler == "DynamicWarmupStableDecayScheduler":
+            scheduler = DynamicWarmupStableDecayScheduler(
+                optimizer=optimizer,
+                lr=self.learning_rate,
+                warmup_steps=16,
+            )
+        else:
+            raise Exception("Unknown scheduler")
+
+        return optimizer, scheduler
 
     def calculate_metrics(self, batch, masked_language_modeling_output, next_sentence_prediction_output):
         metrics = dict()
@@ -121,12 +146,16 @@ class BertModelForSequenceClassification(L.LightningModule):
         pretrained_model: BertModel,
         num_classes: int,
         learning_rate: float = 1e-4,
-        p_dropout: float = 0.1
+        scheduler: str = "CosineAnnealingLR",
+        p_dropout: float = 0.1,
     ):
         super().__init__()
         self.config = pretrained_model.config
         self.learning_rate = learning_rate
         self.num_classes = num_classes
+
+        assert scheduler in ["CosineAnnealingLR", "OneCycleLR", "DynamicWarmupStableDecayScheduler"]
+        self.scheduler = scheduler
 
         self.bert = pretrained_model
 
@@ -185,14 +214,35 @@ class BertModelForSequenceClassification(L.LightningModule):
 
         return classification_loss, metrics
 
-    def configure_optimizers(self):
+    def configure_optimizers(self, training_steps_total):
         optimizer = optim.Adam(
             self.parameters(),
             lr=self.learning_rate,
             betas=(0.9, 0.999),
             eps=1e-12
         )
-        return optimizer
+
+        if self.scheduler == "CosineAnnealingLR":
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                optimizer=optimizer,
+                T_max=training_steps_total
+            )
+        elif self.scheduler == "OneCycleLR":
+            scheduler = optim.lr_scheduler.OneCycleLR(
+                optimizer=optimizer,
+                max_lr=self.learning_rate,
+                total_steps=training_steps_total
+            )
+        elif self.scheduler == "DynamicWarmupStableDecayScheduler":
+            scheduler = DynamicWarmupStableDecayScheduler(
+                optimizer=optimizer,
+                lr=self.learning_rate,
+                warmup_steps=100,
+            )
+        else:
+            raise Exception("Unknown scheduler")
+
+        return optimizer, scheduler
 
     def calculate_metrics(self, sequence_classification_output, labels, prefix="train"):
         accuracy = self.classification_accuracy(
