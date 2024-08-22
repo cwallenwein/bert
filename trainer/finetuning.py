@@ -93,7 +93,7 @@ class TrainerForSequenceClassificationFinetuning:
 
                 progress = training_global_step / training_steps_total
                 if progress >= 0.8 and hasattr(scheduler, "decaying") and hasattr(scheduler, "start_decay") and not scheduler.decaying:
-                    scheduler.start_decay(current_steps=training_step, training_progress_pct=0.8)
+                    scheduler.start_decay(current_steps=training_global_step, training_progress_pct=0.8)
 
                 training_global_step += 1
 
