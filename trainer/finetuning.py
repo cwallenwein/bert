@@ -25,6 +25,8 @@ class TrainerForSequenceClassificationFinetuning:
         training_dataset: Dataset,
         validation_dataset: Dataset,
         epochs: int,
+        training_steps_per_epoch: int = None,
+        validation_steps_per_epoch: int = None
     ):
 
         # initialize logging
@@ -37,14 +39,25 @@ class TrainerForSequenceClassificationFinetuning:
 
         # prepare dataset
         training_dataset.set_format("torch", device=self.device)
-        training_dataset_size = len(training_dataset)
-        training_steps_per_epoch = math.ceil(training_dataset_size / self.training_args.macro_batch_size)
+        if training_steps_per_epoch is None:
+            training_dataset_size = len(training_dataset)
+            training_steps_per_epoch = math.ceil(training_dataset_size / self.training_args.micro_batch_size)
+        else:
+            training_dataset_size = training_steps_per_epoch * self.training_args.micro_batch_size
+            training_dataset = training_dataset.select(range(training_dataset_size))
+            training_steps_per_epoch = training_steps_per_epoch
         training_steps_total = training_steps_per_epoch * epochs
         training_global_step = 0
 
         validation_dataset.set_format("torch", device=self.device)
-        validation_dataset_size = len(validation_dataset)
-        validation_steps_per_epoch = math.ceil(validation_dataset_size / self.training_args.micro_batch_size)
+        if validation_steps_per_epoch is None:
+            validation_dataset_size = len(validation_dataset)
+            validation_steps_per_epoch = math.ceil(validation_dataset_size / self.training_args.micro_batch_size)
+        else:
+            validation_dataset_size = validation_steps_per_epoch * self.training_args.micro_batch_size
+            validation_dataset = validation_dataset.select(range(validation_dataset_size))
+            validation_steps_per_epoch = validation_steps_per_epoch
+
         validation_steps_total = validation_steps_per_epoch * epochs
         validation_global_step = 0
 
@@ -80,7 +93,7 @@ class TrainerForSequenceClassificationFinetuning:
 
                 progress = training_global_step / training_steps_total
                 if progress >= 0.8 and hasattr(scheduler, "decaying") and hasattr(scheduler, "start_decay") and not scheduler.decaying:
-                    scheduler.start_decay(training_step, 0.8)
+                    scheduler.start_decay(current_steps=training_step, training_progress_pct=0.8)
 
                 training_global_step += 1
 

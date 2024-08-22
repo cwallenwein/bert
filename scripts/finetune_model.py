@@ -14,7 +14,9 @@ def finetune(
     learning_rate: float = 1e-4,
     epochs: int = 5,
     scheduler: str = "CosineAnnealingLR",
-    p_dropout: float = 0.1
+    p_dropout: float = 0.1,
+    training_steps_per_epoch: int = None,
+    validation_steps_per_epoch: int = None
 ):
     pretrained_bert = load_pretrained_model(wandb_run_name)
     model = BertModelForSequenceClassification(
@@ -42,7 +44,9 @@ def finetune(
         model=model,
         training_dataset=mnli["train"],
         validation_dataset=mnli["validation_matched"],
-        epochs=epochs
+        epochs=epochs,
+        training_steps_per_epoch=training_steps_per_epoch,
+        validation_steps_per_epoch=validation_steps_per_epoch
     )
 
 
@@ -114,6 +118,8 @@ def main():
     parser.add_argument("--scheduler", type=str, default="CosineAnnealingLR")
     parser.add_argument("--p_dropout", type=float, default=0.1)
     parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--training_steps_per_epoch", type=int, default=None)
+    parser.add_argument("--validation_steps_per_epoch", type=int, default=None)
 
     args = parser.parse_args()
     finetune(**args.__dict__)
