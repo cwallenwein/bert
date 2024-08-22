@@ -108,7 +108,7 @@ class BertModelForPretraining(L.LightningModule):
             scheduler = DynamicWarmupStableDecayScheduler(
                 optimizer=optimizer,
                 lr=self.learning_rate,
-                warmup_steps=16,
+                warmup_steps=300,
             )
         else:
             raise Exception("Unknown scheduler")
