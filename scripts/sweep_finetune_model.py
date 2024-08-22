@@ -1,6 +1,5 @@
 import wandb
 import argparse
-from functools import partial
 from scripts.finetune_model import finetune
 
 
@@ -12,12 +11,16 @@ def start_finetuning_sweep(
     validation_steps_per_epoch: int = None
 ):
     sweep_config = {
-        "method": "random",
+        "method": "bayes",
         "metric": {
             "goal": "maximize",
             "name": "val/accuracy"
         },
         "parameters": {
+            "wandb_run_name": {"value": wandb_run_name},
+            "epochs": {"value": epochs_per_run},
+            "training_steps_per_epoch": {"value": training_steps_per_epoch},
+            "validation_steps_per_epoch": {"value": validation_steps_per_epoch},
             "learning_rate": {"min": 1e-5, "max": 1e-2},
             "scheduler": {"values": [
                 "CosineAnnealingLR", "OneCycleLR", "DynamicWarmupStableDecayScheduler"
@@ -27,14 +30,15 @@ def start_finetuning_sweep(
     }
 
     def sweep_function():
-        wandb.init()
-        finetune(
-            wandb_run_name=wandb_run_name, epochs=epochs_per_run,
-            training_steps_per_epoch=training_steps_per_epoch, validation_steps_per_epoch=validation_steps_per_epoch,
-            **wandb.config
+        wandb.init(
+            project="BERT",
+            job_type="finetuning",
+            dir="..",
+            tags=["mnli"]
         )
+        finetune(**wandb.config)
 
-    sweep_id = wandb.sweep(sweep_config, project="BERT")
+    sweep_id = wandb.sweep(sweep_config)
     wandb.agent(sweep_id=sweep_id, function=sweep_function, count=num_runs)
 
 
