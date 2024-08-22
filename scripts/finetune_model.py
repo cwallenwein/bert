@@ -62,9 +62,11 @@ def load_pretrained_model(wandb_run_name: str) -> BertModel:
     model = BertModelForPretraining(config)
 
     if torch.cuda.is_available():
-        checkpoint = torch.load(f"experiments/{wandb_run_name}/checkpoint.pt")
+        checkpoint = torch.load(f"experiments/{wandb_run_name}/checkpoint.pt", weights_only=True)
     else:
-        checkpoint = torch.load(f"experiments/{wandb_run_name}/checkpoint.pt", map_location=torch.device("cpu"))
+        checkpoint = torch.load(
+            f"experiments/{wandb_run_name}/checkpoint.pt",map_location=torch.device("cpu"), weights_only=True
+        )
 
     model_state_dict = {k.replace("_orig_mod.", ""): v for k, v in checkpoint["model_state_dict"].items()}
     model.load_state_dict(model_state_dict)
