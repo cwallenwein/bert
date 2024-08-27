@@ -16,7 +16,7 @@ class SinusoidalPositionalEmbeddings(nn.Module):
 
         positions = torch.arange(num_embeddings).unsqueeze(1)
         frequencies = (
-            n ** torch.arange(embedding_dim // 2) / (embedding_dim // 2)
+            n ** (torch.arange(embedding_dim // 2) / (embedding_dim // 2))
         ).unsqueeze(0)
 
         values = torch.div(positions, frequencies)
