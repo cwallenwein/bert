@@ -91,12 +91,12 @@ class BertModelForPretraining(L.LightningModule):
             return mlm_loss, metrics
 
     def configure_optimizers(self, training_steps_total):
-        # TODO: implement weight decay
         optimizer = optim.Adam(
             self.parameters(),
             lr=self.learning_rate,
             betas=(0.9, 0.98),
-            eps=1e-12
+            eps=1e-12,
+            weight_decay=0.01
         )
 
         if self.scheduler == "CosineAnnealingLR":
@@ -225,7 +225,8 @@ class BertModelForSequenceClassification(L.LightningModule):
             self.parameters(),
             lr=self.learning_rate,
             betas=(0.9, 0.999),
-            eps=1e-12
+            eps=1e-12,
+            weight_decay=0.01
         )
 
         if self.scheduler == "CosineAnnealingLR":
