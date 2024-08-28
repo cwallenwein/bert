@@ -90,7 +90,7 @@ class BertModelForPretraining(L.LightningModule):
         else:
             return mlm_loss, metrics
 
-    def configure_optimizers(self):
+    def configure_optimizers(self, training_steps_total):
         optimizer = optim.Adam(
             self.parameters(),
             lr=self.learning_rate,
@@ -98,11 +98,16 @@ class BertModelForPretraining(L.LightningModule):
             eps=1e-12
         )
 
-        if self.scheduler == "OneCycleLR":
+        if self.scheduler == "CosineAnnealingLR":
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                optimizer=optimizer,
+                T_max=training_steps_total
+            )
+        elif self.scheduler == "OneCycleLR":
             scheduler = optim.lr_scheduler.OneCycleLR(
                 optimizer=optimizer,
                 max_lr=self.learning_rate,
-                total_steps=3_000
+                total_steps=training_steps_total
             )
         elif self.scheduler == "DynamicWarmupStableDecayScheduler":
             scheduler = DynamicWarmupStableDecayScheduler(
@@ -112,7 +117,7 @@ class BertModelForPretraining(L.LightningModule):
             )
         else:
             raise Exception("Unknown scheduler")
-
+        
         return optimizer, scheduler
 
     def calculate_metrics(self, batch, masked_language_modeling_output, next_sentence_prediction_output):
@@ -237,7 +242,7 @@ class BertModelForSequenceClassification(L.LightningModule):
             scheduler = DynamicWarmupStableDecayScheduler(
                 optimizer=optimizer,
                 lr=self.learning_rate,
-                warmup_steps=100,
+                warmup_steps=300,
             )
         else:
             raise Exception("Unknown scheduler")

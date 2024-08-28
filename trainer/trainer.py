@@ -66,7 +66,9 @@ class TrainerForPreTraining:
         dataset = dataset.iter(batch_size=self.training_args.micro_batch_size)
 
         # prepare optimizer & scheduler
-        optimizer, scheduler = model.configure_optimizers()
+        # TODO fix this so the assert only occurrs if needed (for OneCycleLR)
+        assert max_steps is not None, "please set max_steps"
+        optimizer, scheduler = model.configure_optimizers(training_steps_total=max_steps)
 
         start_time = time.time()
         if max_steps is None:
