@@ -16,8 +16,8 @@ from pathlib import Path
 
 
 class TrainerForPreTraining:
-    # TODO: set bfloat16 for model and optimizer
     # TODO: add lr for max_steps (currently only supported for max_time_in_min)
+    # TODO: also log wallclock time every iteration -> plot to compare loss after a certain time
     def __init__(self, training_args: TrainingArguments, verbose: bool = True):
         self.training_args = training_args
         self.device = self.get_device(training_args.device)
@@ -65,7 +65,7 @@ class TrainerForPreTraining:
         assert max_steps is not None, "please set max_steps"
         optimizer, scheduler = model.configure_optimizers(training_steps_total=max_steps)
 
-        start_time = time.time()
+        training_start_time = time.time()
         if max_steps is None:
             progress_bar = tqdm(dataset, desc="Training", unit=" steps")
         else:
@@ -75,7 +75,7 @@ class TrainerForPreTraining:
             max_steps = 10**15
         for step in range(max_steps):
             macro_batch_loss = 0.0
-            step_start = time.time()
+            step_start_time = time.time()
             assert self.training_args.gradient_accumulation_steps > 0, "Gradient accumulation steps must be greater than 0"
             for micro_step in range(self.training_args.gradient_accumulation_steps):
                 micro_batch = next(dataset)
@@ -103,22 +103,22 @@ class TrainerForPreTraining:
             optimizer.zero_grad()
             scheduler.step()
 
+            training_duration_in_sec = (time.time() - training_start_time)
             if max_time_in_sec is not None:
-                training_time_in_sec = (time.time() - start_time)
-                if training_time_in_sec > max_time_in_sec * 0.8 and hasattr(scheduler, "decaying") and hasattr(scheduler, "start_decay") and not scheduler.decaying:
+                if training_duration_in_sec > max_time_in_sec * 0.8 and hasattr(scheduler, "decaying") and hasattr(scheduler, "start_decay") and not scheduler.decaying:
                     scheduler.start_decay(step, 0.8)
-                elif training_time_in_sec > max_time_in_sec:
+                elif training_duration_in_sec > max_time_in_sec:
                     break
 
             # log loss, lr and step time
-            step_time = time.time() - step_start
+            step_time = time.time() - step_start_time
 
             metrics = metrics | {
                 "loss": macro_batch_loss,
                 "learning_rate": scheduler.get_last_lr()[0],
-                "step_duration": step_time,
-                "step_duration_per_sample": step_time / self.training_args.macro_batch_size,
-
+                "step_duration_in_sec": step_time,
+                "step_duration_per_sample_in_sec": step_time / self.training_args.macro_batch_size,
+                "training_duration_in_sec": training_duration_in_sec,
             }
             wandb.log(metrics, step=step)
 

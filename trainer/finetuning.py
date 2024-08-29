@@ -6,6 +6,7 @@ import lightning as L
 from model.bert import BertConfig
 from trainer.arguments import TrainingArguments
 
+import time
 import wandb
 import math
 from tqdm import tqdm
@@ -64,6 +65,7 @@ class TrainerForSequenceClassificationFinetuning:
         # prepare optimizer and scheduler
         optimizer, scheduler = model.configure_optimizers(training_steps_total)
 
+        training_start_time = time.time()
         for epoch in tqdm(range(epochs), desc="Training epochs"):
             model.train()
             iterable_training_dataset = training_dataset.iter(batch_size=self.training_args.micro_batch_size)
@@ -75,12 +77,15 @@ class TrainerForSequenceClassificationFinetuning:
                 # do backward pass
                 loss.backward()
 
+                
                 # log loss and lr
+                training_duration_in_sec = (time.time() - training_start_time)
                 metrics = metrics | {
                     "train/loss": loss.item(),
                     "train/learning_rate": scheduler.get_last_lr()[0],
                     "train/step": training_global_step,
-                    "train/epoch": epoch
+                    "train/epoch": epoch,
+                    "training_duration_in_sec": training_duration_in_sec,
                 }
                 wandb.log(metrics)
 
