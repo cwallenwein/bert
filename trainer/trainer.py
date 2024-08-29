@@ -17,9 +17,6 @@ from pathlib import Path
 
 class TrainerForPreTraining:
     # TODO: set bfloat16 for model and optimizer
-    # TODO: log time / step
-    # TODO: log total wallclock time
-    # TODO: log flops / utilization
     # TODO: add lr for max_steps (currently only supported for max_time_in_min)
     def __init__(self, training_args: TrainingArguments, verbose: bool = True):
         self.training_args = training_args
@@ -34,8 +31,6 @@ class TrainerForPreTraining:
         max_epochs: int = None,
         max_time_in_min: int = None,
     ):
-        # TODO: prepare everything
-        # TODO: depending on max_steps, max_epochs or max_time_in_min decide how to iterate
         # TODO: make inner iteration identical
 
         if max_steps is not None:

@@ -28,12 +28,14 @@ class TrainingArguments:
 def parse_dtype(dtype: str) -> torch.dtype:
     dtype_mapping = {
         "bfloat16": torch.bfloat16,
-        "float16": torch.float16,
-        "float32": torch.float32,
-        "float64": torch.float64,
+        "float32": torch.float32
     }
 
     try:
-        return dtype_mapping[dtype]
+        dtype = dtype_mapping[dtype]
+        if dtype == torch.bfloat16 and not (torch.cuda.is_available() and torch.cuda.is_bf16_supported()):
+            dtype = torch.float32
+        print("model_dtype", dtype)
+        return dtype
     except KeyError:
         raise ValueError(f"Unsupported dtype: {dtype}")
