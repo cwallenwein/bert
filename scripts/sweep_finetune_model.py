@@ -7,8 +7,8 @@ def start_finetuning_sweep(
     wandb_run_name: str,
     num_runs: int = 8,
     epochs_per_run: int = 5,
-    training_steps_per_epoch: int = None,
-    validation_steps_per_epoch: int = None
+    limit_train_batches: float = 1.0,
+    limit_val_batches: float = 1.0
 ):
     sweep_config = {
         "method": "bayes",
@@ -19,8 +19,8 @@ def start_finetuning_sweep(
         "parameters": {
             "wandb_run_name": {"value": wandb_run_name},
             "epochs": {"value": epochs_per_run},
-            "training_steps_per_epoch": {"value": training_steps_per_epoch},
-            "validation_steps_per_epoch": {"value": validation_steps_per_epoch},
+            "limit_train_batches": {"value": limit_train_batches},
+            "limit_val_batches": {"value": limit_val_batches},
             "learning_rate": {"min": 1e-5, "max": 1e-2},
             "scheduler": {"values": [
                 "CosineAnnealingLR", "OneCycleLR", "DynamicWarmupStableDecayScheduler"
@@ -50,8 +50,8 @@ def main():
     parser.add_argument("--wandb_run_name", type=str, required=True)
     parser.add_argument("--num_runs", type=int, default=8)
     parser.add_argument("--epochs_per_run", type=int, default=5)
-    parser.add_argument("--training_steps_per_epoch", type=int, default=None)
-    parser.add_argument("--validation_steps_per_epoch", type=int, default=None)
+    parser.add_argument("--limit_train_batches", type=float, default=1.0)
+    parser.add_argument("--limit_val_batches", type=float, default=1.0)
 
 
     args = parser.parse_args()
