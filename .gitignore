@@ -7,3 +7,8 @@ data/datasets/
 wandb
 
 *.pt
+__pycache__
+lightning_logs
+tmp
+bert
+.DS_Store
