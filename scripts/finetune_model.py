@@ -1,22 +1,20 @@
 import argparse
 
 import torch
-from trainer.arguments import TrainingArguments
-from trainer.finetuning import TrainerForSequenceClassificationFinetuning
 from model.bert import BertConfig, BertModelForPretraining, BertModelForSequenceClassification, BertModel
-from datasets import load_dataset
-import transformers
-from transformers import BertTokenizer
+from data import MNLIDataModule
+import lightning.pytorch as pl
 
 
 def finetune(
     wandb_run_name: str,
     learning_rate: float = 1e-4,
+    batch_size: int = 16,
     epochs: int = 5,
     scheduler: str = "CosineAnnealingLR",
     p_dropout: float = 0.1,
-    training_steps_per_epoch: int = None,
-    validation_steps_per_epoch: int = None
+    limit_train_batches: float = 1.0,
+    limit_val_batches: float = 1.0
 ):
     pretrained_bert = load_pretrained_model(wandb_run_name)
     model = BertModelForSequenceClassification(
@@ -25,101 +23,84 @@ def finetune(
         learning_rate=learning_rate,
         scheduler=scheduler,
         p_dropout=p_dropout,
-
-    )
-    tokenizer = load_tokenizer()
-    mnli = load_mnli(tokenizer)
-
-    training_args = TrainingArguments(
-        micro_batch_size=16,
-        macro_batch_size=16,
-        device="cuda",
-        use_torch_compile=True,
-        model_dtype="bfloat16"
     )
 
-    finetuning_trainer = TrainerForSequenceClassificationFinetuning(training_args, verbose=False)
+    # prepare model
+    if not torch.backends.mps.is_available():
+        model = torch.compile(model)
 
-    finetuning_trainer.train(
-        model=model,
-        training_dataset=mnli["train"],
-        validation_dataset=mnli["validation_matched"],
-        epochs=epochs,
-        training_steps_per_epoch=training_steps_per_epoch,
-        validation_steps_per_epoch=validation_steps_per_epoch
+    # load data
+    mnli_datamodule = MNLIDataModule(batch_size=batch_size)
+
+    # setup logging
+    wandb_logger = pl.loggers.WandbLogger(
+        project="BERT",
+        log_model=True,
+        job_type="finetuning",
+        dir="..",
+        config={
+                "model": model.config.__dict__
+        },
+        tags=["mnli"]
     )
+    wandb_logger.watch(model, log="gradients")
+    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
 
+    trainer = pl.Trainer(
+        max_epochs=epochs,
+        logger=wandb_logger,
+        precision = "bf16-true",
+        limit_train_batches=limit_train_batches,
+        limit_val_batches=limit_val_batches,
+        callbacks=[lr_monitor]
+    )
+    trainer.fit(model, datamodule=mnli_datamodule)
+    wandb_logger.experiment.unwatch(model)
+    
 
 def load_pretrained_model(wandb_run_name: str) -> BertModel:
-    config = BertConfig(
-        d_model=768,
-        n_layers=12,
-        context_length=128,
-        n_heads=12,
-        feed_forward_intermediate_size=3072,
-        attention_implementation="pytorch",
-        p_embedding_dropout=0.1,
-        p_attention_dropout=0.1,
-        p_feed_forward_dropout=0.1,
-    )
-
-    model = BertModelForPretraining(config)
+    # TODO: use pl_module.load_from_checkpoint to automatically get the correct config
 
     if torch.cuda.is_available():
         checkpoint = torch.load(f"experiments/{wandb_run_name}/checkpoint.pt", weights_only=True)
     else:
         checkpoint = torch.load(
-            f"experiments/{wandb_run_name}/checkpoint.pt",map_location=torch.device("cpu"), weights_only=True
+            f"experiments/{wandb_run_name}/checkpoint.pt", map_location=torch.device("cpu")#, weights_only=True
         )
+
+    default_config = BertConfig(
+        d_model=768,
+        n_layers=12,
+        context_length=128,
+        n_heads=12,
+        feed_forward_intermediate_size=3072,
+        attention_implementation="pytorch"
+    )
+
+    if "config" in checkpoint.keys():
+        config = checkpoint["config"]
+    else:
+        config = default_config
+
+    model = BertModelForPretraining(config)
 
     model_state_dict = {k.replace("_orig_mod.", ""): v for k, v in checkpoint["model_state_dict"].items()}
     model.load_state_dict(model_state_dict)
     return model.bert
-
-
-def load_mnli(tokenizer):
-    mnli = load_dataset("glue", "mnli")
-
-    transformers.logging.set_verbosity_error()
-
-    def tokenize(sample):
-        return tokenizer(
-            sample["premise"], sample["hypothesis"],
-            max_length=128,
-            padding="max_length",
-            truncation=True
-        )
-
-    mnli_tokenized = mnli.map(
-        tokenize,
-        batched=True,
-        batch_size=1000,
-        remove_columns=[
-            "premise",
-            "hypothesis",
-            "idx"
-        ]
-    )
-    mnli_tokenized = mnli_tokenized.rename_column("label", "labels")
-    return mnli_tokenized
-
-
-def load_tokenizer():
-    return BertTokenizer.from_pretrained("bert-base-uncased")
-
 
 def main():
     # Define parser
     parser = argparse.ArgumentParser(description="Finetune BERT model")
 
     # Finetuning arguments
-    parser.add_argument("--wandb_run_name", type=str)
+    parser.add_argument("--wandb_run_name", type=str, required=True)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
+    parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--scheduler", type=str, default="CosineAnnealingLR")
     parser.add_argument("--p_dropout", type=float, default=0.1)
     parser.add_argument("--epochs", type=int, default=5)
-    parser.add_argument("--training_steps_per_epoch", type=int, default=None)
-    parser.add_argument("--validation_steps_per_epoch", type=int, default=None)
+    parser.add_argument("--limit_train_batches", type=float, default=1.0)
+    parser.add_argument("--limit_val_batches", type=float, default=1.0)
 
     args = parser.parse_args()
     finetune(**args.__dict__)

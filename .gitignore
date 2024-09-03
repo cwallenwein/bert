@@ -10,5 +10,5 @@ wandb
 __pycache__
 lightning_logs
 tmp
-bert
+/BERT
 .DS_Store

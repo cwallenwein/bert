@@ -182,6 +182,8 @@ class BertModelForSequenceClassification(L.LightningModule):
             if isinstance(module, nn.Dropout):
                 module.p = p_dropout
 
+        self.save_hyperparameters()
+
     def forward(
             self,
             input_ids: Float[Tensor, "batch sequence_length"],
@@ -205,9 +207,13 @@ class BertModelForSequenceClassification(L.LightningModule):
             sequence_classification_output, batch["labels"]
         )
 
-        metrics = self.calculate_metrics(sequence_classification_output, batch["labels"], prefix="train")
+        accuracy = self.classification_accuracy(
+            sequence_classification_output, batch["labels"]
+        )
+        self.log("train/loss", classification_loss)
+        self.log("train/accuracy", accuracy)
 
-        return classification_loss, metrics
+        return classification_loss
 
     def validation_step(self, batch, batch_idx):
         sequence_classification_output = self(**batch)
@@ -216,11 +222,15 @@ class BertModelForSequenceClassification(L.LightningModule):
             sequence_classification_output, batch["labels"]
         )
 
-        metrics = self.calculate_metrics(sequence_classification_output, batch["labels"], prefix="val")
+        accuracy = self.classification_accuracy(
+            sequence_classification_output, batch["labels"]
+        )
+        self.log("val/loss", classification_loss)
+        self.log("val/accuracy", accuracy)
 
-        return classification_loss, metrics
+        return classification_loss
 
-    def configure_optimizers(self, training_steps_total):
+    def configure_optimizers(self, training_steps_total = None):
         optimizer = optim.Adam(
             self.parameters(),
             lr=self.learning_rate,
@@ -228,6 +238,9 @@ class BertModelForSequenceClassification(L.LightningModule):
             eps=1e-12,
             weight_decay=0.01
         )
+
+        if training_steps_total is None and self.trainer is not None:
+            training_steps_total = self.trainer.estimated_stepping_batches
 
         if self.scheduler == "CosineAnnealingLR":
             scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -249,11 +262,5 @@ class BertModelForSequenceClassification(L.LightningModule):
         else:
             raise Exception("Unknown scheduler")
 
-        return optimizer, scheduler
-
-    def calculate_metrics(self, sequence_classification_output, labels, prefix="train"):
-        accuracy = self.classification_accuracy(
-            sequence_classification_output, labels
-        )
-        metrics = {f"{prefix}/accuracy": accuracy}
-        return metrics
+        scheduler =  {"scheduler": scheduler, "name": "train/lr", "interval": "step"}
+        return {"optimizer": optimizer, "lr_scheduler": scheduler}, 
