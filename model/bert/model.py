@@ -33,6 +33,7 @@ class BertModel(nn.Module):
         attention_mask: Float[Tensor, "batch sequence_length"],
         **kwargs
     ):
+        # TODO: define dimensions of return type
         # TODO: define default token_type_ids and attention_mask
 
         x = self.embedding(
@@ -160,6 +161,7 @@ class BertEncoderLayer(nn.Module):
         x: Float[Tensor, "batch seq_len d_model"],
         attention_mask: Float[Tensor, "batch seq_len"]
     ):
+        # TODO: define return type
         attention_mask = attention_mask.bool()
 
         if self.config.layer_norm == "pre":
