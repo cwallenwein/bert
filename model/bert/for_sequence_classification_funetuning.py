@@ -1,4 +1,3 @@
-import torch
 import torchmetrics
 from torch import nn, optim
 from model.bert.model import BertModel
@@ -36,7 +35,7 @@ class BertModelForSequenceClassification(pl.LightningModule):
             task="multiclass",
             num_classes=num_classes,
             average="micro"
-        ).to(self.device)
+        )
 
         # freeze bert
         for param in self.bert.parameters():
@@ -67,11 +66,9 @@ class BertModelForSequenceClassification(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         sequence_classification_output = self(**batch)
-
         classification_loss = self.classification_loss_fn(
             sequence_classification_output, batch["labels"]
         )
-
         accuracy = self.classification_accuracy(
             sequence_classification_output, batch["labels"]
         )

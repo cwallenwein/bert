@@ -46,10 +46,11 @@ def finetune(
     wandb_logger.watch(model, log="gradients")
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="step")
 
+    # setup trainer
     trainer = pl.Trainer(
         max_epochs=epochs,
         logger=wandb_logger,
-        precision = "bf16-true",
+        precision = "bf16-mixed",
         limit_train_batches=limit_train_batches,
         limit_val_batches=limit_val_batches,
         callbacks=[lr_monitor]

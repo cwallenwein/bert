@@ -1,11 +1,11 @@
 from torch.utils.data import DataLoader
 from datasets import Dataset
 from transformers import BertTokenizerFast
-import lightning as L
+import lightning.pytorch as pl
 from datasets import load_dataset
 
 
-class MNLIDataModule(L.LightningDataModule):
+class MNLIDataModule(pl.LightningDataModule):
     def __init__(self, context_length: int = 128, batch_size: int = 32, cache_dir="../data/datasets/cache"):
         super().__init__()
         self.context_length = context_length
