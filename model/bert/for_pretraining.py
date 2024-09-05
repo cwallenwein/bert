@@ -4,7 +4,7 @@ from model.bert.config import BertConfig
 from model.bert.model import BertModel
 import lightning.pytorch as pl
 import torchmetrics
-from trainer.scheduler import DynamicWarmupStableDecayScheduler
+from model.lr_scheduler import DynamicWarmupStableDecayScheduler
 
 # Typehints
 from jaxtyping import Float
@@ -25,7 +25,8 @@ class BertModelForMLM(pl.LightningModule):
         self.bert = BertModel(config)
         self.learning_rate = learning_rate
 
-        assert scheduler in ["CosineAnnealingLR", "OneCycleLR", "DynamicWarmupStableDecayScheduler"]
+        assert scheduler in ["CosineAnnealingLR", "OneCycleLR"]
+        # TODO: fix support for DynamicWarmupStableDecayScheduler
         self.scheduler = scheduler
 
         # masked language modeling

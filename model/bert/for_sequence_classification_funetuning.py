@@ -2,7 +2,7 @@ import torchmetrics
 from torch import nn, optim
 from model.bert.model import BertModel
 import lightning.pytorch as pl
-from trainer.scheduler import DynamicWarmupStableDecayScheduler
+from model.lr_scheduler import DynamicWarmupStableDecayScheduler
 
 # Typehints
 from jaxtyping import Float
@@ -24,7 +24,8 @@ class BertModelForSequenceClassification(pl.LightningModule):
         self.learning_rate = learning_rate
         self.num_classes = num_classes
 
-        assert scheduler in ["CosineAnnealingLR", "OneCycleLR", "DynamicWarmupStableDecayScheduler"]
+        assert scheduler in ["CosineAnnealingLR", "OneCycleLR"]
+        # TODO: Fix support for DynamicWarmupStableDecayScheduler
         self.scheduler = scheduler
 
         self.bert = pretrained_model
