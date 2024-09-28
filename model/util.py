@@ -1,4 +1,4 @@
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 
 def init_xavier(
@@ -6,7 +6,7 @@ def init_xavier(
     weights: Tensor = None,
     bias: Tensor = None,
     embedding: nn.Embedding = None,
-    sequential: nn.Sequential = None
+    sequential: nn.Sequential = None,
 ):
     if linear is not None:
         nn.init.xavier_uniform_(linear.weight)
@@ -22,4 +22,3 @@ def init_xavier(
         for module in sequential.children():
             if isinstance(module, nn.Linear):
                 init_xavier(linear=module)
-

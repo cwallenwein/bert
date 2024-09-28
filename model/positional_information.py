@@ -1,15 +1,14 @@
-import torch
-from torch import nn
+from typing import Annotated
 
-# Typehints
-from jaxtyping import Float
-from torch import Tensor
+import torch
+from torch import Tensor, nn
 
 
 class SinusoidalPositionalEmbeddings(nn.Module):
     """
     Based on https://arxiv.org/pdf/1706.03762
     """
+
     def __init__(self, embedding_dim: int, num_embeddings: int, n: int = 10_000):
         super().__init__()
         positional_encoding = torch.zeros(num_embeddings, embedding_dim)
@@ -27,7 +26,7 @@ class SinusoidalPositionalEmbeddings(nn.Module):
 
     def forward(
         self,
-        token_position: Float[Tensor, "sequence_length"],
+        token_position: Annotated[Tensor, torch.int, "sequence_length"],
     ):
         seq_length = token_position.size(0)
         return self.positional_encoding[:seq_length, :]
@@ -37,6 +36,7 @@ class ScaledSinusoidalPositionalEmbeddings(nn.Module):
     """
     Based on https://proceedings.mlr.press/v162/hua22a/hua22a.pdf
     """
+
     def __init__(self, embedding_dim: int, num_embeddings: int, n: int = 10_000):
         super().__init__()
         self.scaling_factor = nn.Parameter(torch.ones(1))
@@ -46,6 +46,6 @@ class ScaledSinusoidalPositionalEmbeddings(nn.Module):
 
     def forward(
         self,
-        input_ids: Float[Tensor, "sequence_length"],
+        input_ids: Annotated[Tensor, torch.int, "sequence_length"],
     ):
         return self.scaling_factor * self.sinusoidal_positional_embedding(input_ids)

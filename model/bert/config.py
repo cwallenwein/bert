@@ -1,6 +1,7 @@
 import json
-from pathlib import Path
 from dataclasses import dataclass, fields
+from pathlib import Path
+
 from transformers import BertConfig as HuggingfaceBertConfig
 
 
@@ -31,7 +32,11 @@ class BertConfig:
         assert self.layer_norm in ["pre", "post"]
         assert self.feed_forward_activation in ["relu", "gelu", "glu"]
         assert self.attention_implementation in ["default", "pytorch"]
-        assert self.positional_information_type in ["learned", "sinusoidal", "scaled_sinusoidal"]
+        assert self.positional_information_type in [
+            "learned",
+            "sinusoidal",
+            "scaled_sinusoidal",
+        ]
 
     @classmethod
     def from_dict(cls, config: dict, pretrained_tensorflow: bool = False):
@@ -51,14 +56,18 @@ class BertConfig:
             )
         else:
             field_names = {field.name for field in fields(cls)}
-            return BertConfig(**{key: value for key, value in config.items() if key in field_names})
+            return BertConfig(
+                **{key: value for key, value in config.items() if key in field_names}
+            )
 
     @classmethod
     def from_json(cls, filename, pretrained_tensorflow: bool = False):
         path = Path(filename)
         with open(path, "r") as f:
             config = json.load(f)
-            return BertConfig.from_dict(config, pretrained_tensorflow=pretrained_tensorflow)
+            return BertConfig.from_dict(
+                config, pretrained_tensorflow=pretrained_tensorflow
+            )
 
     @classmethod
     def from_huggingface_config(cls, config: HuggingfaceBertConfig):

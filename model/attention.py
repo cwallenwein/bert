@@ -1,27 +1,32 @@
 import math
+from typing import Annotated
+
 import torch
-from torch import nn
+from einops import einsum, rearrange
+from torch import Tensor, nn
 from torch.nn import functional as F
+
 from model.util import init_xavier
 
-from einops import einsum, rearrange
-
-# type hints
-from torch import Tensor
-from jaxtyping import Float, Bool
-
 # TODO: Fix attention mask for flash attention
+# TODO: add p_attention_dropout
+# TODO: merge QKV weights
 
 
 def scaled_dot_product_attention(
-    query: Float[Tensor, "batch n_heads seq_len d_head"],
-    key: Float[Tensor, "batch n_heads seq_len d_head"],
-    value: Float[Tensor, "batch n_heads seq_len d_head"],
-    attention_mask: Bool[Tensor, "batch seq_len"]
+    query: Annotated[Tensor, "batch n_heads seq_len d_head"],
+    key: Annotated[Tensor, torch.float, "batch n_heads seq_len d_head"],
+    value: Annotated[Tensor, torch.float, "batch n_heads seq_len d_head"],
+    attention_mask: Annotated[Tensor, torch.bool, "batch seq_len"],
 ):
     attention_score = einsum(
-        query, key,
-        "batch n_heads query_len d_head, batch n_heads key_len d_head -> batch n_heads query_len key_len"
+        query,
+        key,
+        """
+        batch n_heads query_len d_head,
+        batch n_heads key_len d_head
+        -> batch n_heads query_len key_len
+        """,
     )
     mask = torch.where(attention_mask, 0, float("inf"))
     # add dim for broadcasting (n_heads, query_len)
@@ -29,19 +34,29 @@ def scaled_dot_product_attention(
 
     attention_score -= mask
     attention_probability = F.softmax(
-        attention_score / math.sqrt(query.size(-1)),
-        dim=-1
+        attention_score / math.sqrt(query.size(-1)), dim=-1
     )
     output = einsum(
-        attention_probability, value,
-        "batch n_heads query_len key_len, batch n_heads seq_len d_head -> batch n_heads query_len d_head"
+        attention_probability,
+        value,
+        """
+        batch n_heads query_len key_len,
+        batch n_heads seq_len d_head
+        -> batch n_heads query_len d_head
+        """,
     )
 
     return output
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_model: int, n_heads: int, bias: bool, attention_implementation: str = "default"):
+    def __init__(
+        self,
+        d_model: int,
+        n_heads: int,
+        bias: bool,
+        attention_implementation: str = "default",
+    ):
         super().__init__()
 
         assert attention_implementation in ["default", "pytorch", "flash-attn"]
@@ -62,38 +77,33 @@ class MultiHeadAttention(nn.Module):
 
     def forward(
         self,
-        x: Float[Tensor, "batch seq_len d_model"],
-        attention_mask: Bool[Tensor, "batch seq_len"]
+        x: Annotated[Tensor, torch.float, "batch seq_len d_model"],
+        attention_mask: Annotated[Tensor, torch.bool, "batch seq_len"],
     ):
+        # TODO: define return type
         query = rearrange(
             self.query_weight(x),
             "batch seq_len (n_heads d_head) -> batch n_heads seq_len d_head",
-            n_heads=self.n_heads
+            n_heads=self.n_heads,
         )
         key = rearrange(
             self.key_weight(x),
             "batch seq_len (n_heads d_head) -> batch n_heads seq_len d_head",
-            n_heads=self.n_heads
+            n_heads=self.n_heads,
         )
         value = rearrange(
             self.value_weight(x),
             "batch seq_len (n_heads d_head) -> batch n_heads seq_len d_head",
-            n_heads=self.n_heads
+            n_heads=self.n_heads,
         )
 
         if self.attention_implementation == "default":
             attention_output = scaled_dot_product_attention(
-                query,
-                key,
-                value,
-                attention_mask
+                query, key, value, attention_mask
             )
         elif self.attention_implementation == "pytorch":
             attention_output = F.scaled_dot_product_attention(
-                query,
-                key,
-                value,
-                attn_mask=attention_mask[:, None, None, :]
+                query, key, value, attn_mask=attention_mask[:, None, None, :]
             )
         elif self.attention_implementation == "flash-attn":
             attention_output = F.scaled_dot_product_attention(
@@ -105,7 +115,10 @@ class MultiHeadAttention(nn.Module):
         else:
             raise Exception("Unknown multi-head attention implementation")
 
-        attention_output = rearrange(attention_output, "batch n_heads seq_len d_head -> batch seq_len (n_heads d_head)")
+        attention_output = rearrange(
+            attention_output,
+            "batch n_heads seq_len d_head -> batch seq_len (n_heads d_head)",
+        )
 
         output = self.output_weight(attention_output)
 

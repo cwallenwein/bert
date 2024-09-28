@@ -1,7 +1,7 @@
 import argparse
 
 import torch
-from model.bert import BertConfig, BertModelForPretraining, BertModelForSequenceClassification, BertModel
+from model.bert import BertConfig, BertModelForMLM, BertModelForSequenceClassification, BertModel
 from data import MNLIDataModule
 import lightning.pytorch as pl
 
@@ -83,7 +83,7 @@ def load_pretrained_model(wandb_run_name: str) -> BertModel:
     else:
         config = default_config
 
-    model = BertModelForPretraining(config)
+    model = BertModelForMLM(config)
 
     model_state_dict = {k.replace("_orig_mod.", ""): v for k, v in checkpoint["model_state_dict"].items()}
     model.load_state_dict(model_state_dict)

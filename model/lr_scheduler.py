@@ -1,13 +1,15 @@
 import math
-from torch.optim.lr_scheduler import LRScheduler
-from torch.optim import Optimizer
 from typing import List
+
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LRScheduler
 
 
 class WarmupStableDecayScheduler(LRScheduler):
     """
     Based on https://arxiv.org/pdf/2405.18392
     """
+
     def __init__(
         self,
         optimizer: Optimizer,
@@ -16,7 +18,7 @@ class WarmupStableDecayScheduler(LRScheduler):
         warmup_steps: int,
         decay_steps: int,
         last_epoch=-1,
-        verbose=False
+        verbose=False,
     ):
         self.lr = lr
         self.total_steps = total_steps
@@ -42,7 +44,7 @@ class WarmupStableDecayScheduler(LRScheduler):
             return self.lr * self.sqrt_decay_function(step=step)
 
     def linear_warmup_function(self, step: int):
-        return (step+1) / self.warmup_steps
+        return (step + 1) / self.warmup_steps
 
     def sqrt_decay_function(self, step: int):
         if step >= self.total_steps:
@@ -55,13 +57,14 @@ class DynamicWarmupStableDecayScheduler(LRScheduler):
     """
     Based on https://arxiv.org/pdf/2405.18392
     """
+
     def __init__(
         self,
         optimizer: Optimizer,
         lr: float,
         warmup_steps: int,
         last_epoch=-1,
-        verbose=False
+        verbose=False,
     ):
         self.lr = lr
         self.warmup_steps = warmup_steps
@@ -75,7 +78,9 @@ class DynamicWarmupStableDecayScheduler(LRScheduler):
         self.decaying = True
         decay_pct = 1 - training_progress_pct
         total_steps = int(current_steps / training_progress_pct)
-        assert total_steps > 0, f"current_steps: {current_steps}, training_progress_pct: {training_progress_pct}"
+        assert (
+            total_steps > 0
+        ), f"current_steps: {current_steps}, training_progress_pct: {training_progress_pct}"
         decay_steps = int(total_steps * decay_pct)
         assert decay_steps > 0, f"total_steps: {total_steps}, decay_pct: {decay_pct}"
         self.decay_steps = decay_steps
@@ -99,7 +104,7 @@ class DynamicWarmupStableDecayScheduler(LRScheduler):
             return self.lr * self.sqrt_decay_function(step=step)
 
     def linear_warmup_function(self, step: int):
-        return (step+1) / self.warmup_steps
+        return (step + 1) / self.warmup_steps
 
     def sqrt_decay_function(self, step: int):
         if step >= self.total_steps:
