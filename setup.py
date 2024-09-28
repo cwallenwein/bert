@@ -6,9 +6,15 @@ setup(
     description="Train BERT models.",
     author="Christian Wallenwein",
     packages=["model", "data", "trainer"],
-    install_requires=["torch", "numpy", "datasets", "tqdm", "nltk", "transformers", "torchmetrics", "wandb"],
-    scripts=[
-        "scripts/prepare_dataset.py",
-        "scripts/train_model.py"
-    ]
+    install_requires=[
+        "torch",
+        "numpy",
+        "datasets",
+        "tqdm",
+        "nltk",
+        "transformers",
+        "torchmetrics",
+        "wandb",
+    ],
+    scripts=["scripts/prepare_dataset.py", "scripts/train_model.py"],
 )
