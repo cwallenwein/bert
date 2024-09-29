@@ -16,5 +16,5 @@ setup(
         "torchmetrics",
         "wandb",
     ],
-    scripts=["scripts/prepare_dataset.py", "scripts/train_model.py"],
+    # scripts=["scripts/prepare_dataset.py", "scripts/train_model.py"],
 )
