@@ -5,7 +5,7 @@ setup(
     version="0.1",
     description="Train BERT models.",
     author="Christian Wallenwein",
-    packages=["model", "data", "trainer"],
+    packages=["model", "data"],
     install_requires=[
         "torch",
         "numpy",
