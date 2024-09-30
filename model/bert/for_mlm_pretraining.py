@@ -4,7 +4,6 @@ from typing import Annotated
 import lightning.pytorch as pl
 import torch
 import torchmetrics
-from progressive_scheduling import CosineAnnealingLR, OneCycleLR
 from torch import Tensor, nn, optim
 
 from model.bert.config import BertConfig
@@ -20,6 +19,7 @@ class BertModelForMLM(pl.LightningModule):
         batch_size: int = 16,
         learning_rate: float = 1e-4,
         scheduler: str = "CosineAnnealingLR",
+        with_progressive_scheduling: bool = False,
         compile: bool = False,
     ):
         super().__init__()
@@ -31,6 +31,7 @@ class BertModelForMLM(pl.LightningModule):
         assert scheduler in ["CosineAnnealingLR", "OneCycleLR"]
         # TODO: fix support for DynamicWarmupStableDecayScheduler
         self.scheduler = scheduler
+        self.with_progressive_scheduling = with_progressive_scheduling
 
         # masked language modeling
         self.masked_language_modeling_head = nn.Linear(
@@ -44,6 +45,7 @@ class BertModelForMLM(pl.LightningModule):
 
         # only compile submodules to fix lightning errors when calling self.log
         if compile:
+            print("Compiling the model")
             self.bert = torch.compile(self.bert)
             self.masked_language_modeling_head = torch.compile(
                 self.masked_language_modeling_head
@@ -57,7 +59,7 @@ class BertModelForMLM(pl.LightningModule):
         attention_mask: Annotated[Tensor, "batch sequence_length"],
         masked_tokens_mask: Annotated[Tensor, "batch sequence_length"],
         token_type_ids: Annotated[Tensor, "batch sequence_length"] = None,
-        **kwargs
+        **kwargs,
     ):
         bert_output = self.bert(
             input_ids=input_ids,
@@ -69,6 +71,14 @@ class BertModelForMLM(pl.LightningModule):
         return mlm_output
 
     def training_step(self, batch, batch_idx):
+        # TODO: fix this time tracking
+        #       it's only tracking the forward pass but not actually the total time of the step
+        #       possible fixes:
+        #           add a training progress callback that tracks the training progress and the step duration
+        #               + separate tracking the time per step from the actual model 👍
+        #               + can be easily enabled and disabled
+        #               + lr scheduling can be turned into metric-based scheduling and can be completely controlled from within the training code (no controll inside of progressive_scheduling)
+        #               +
         step_start_time = time.time()
         masked_language_modeling_output = self(**batch)
 
@@ -83,6 +93,8 @@ class BertModelForMLM(pl.LightningModule):
         mlm_acc = self.mlm_accuracy(
             masked_language_modeling_output, masked_token_labels
         )
+
+        # print(self.optimizers().param_groups[0]["lr"])
 
         self.log("train/loss", mlm_loss)
         self.log("train/mlm_acc", mlm_acc)
@@ -100,12 +112,51 @@ class BertModelForMLM(pl.LightningModule):
             weight_decay=0.01,
         )
 
-        if self.scheduler == "CosineAnnealingLR":
-            scheduler = CosineAnnealingLR(optimizer)
-        elif self.scheduler == "OneCycleLR":
-            scheduler = OneCycleLR(optimizer, max_lr=self.learning_rate)
-        else:
-            raise Exception("Unknown scheduler")
+        print("self.with_progressive_scheduling", self.with_progressive_scheduling)
+        if self.with_progressive_scheduling:
+            import progressive_scheduling
 
-        scheduler = {"scheduler": scheduler, "name": "train/lr", "interval": "step"}
+            if self.scheduler == "CosineAnnealingLR":
+                scheduler = progressive_scheduling.CosineAnnealingLR(optimizer)
+            elif self.scheduler == "OneCycleLR":
+                scheduler = progressive_scheduling.OneCycleLR(
+                    optimizer, max_lr=self.learning_rate
+                )
+            else:
+                raise Exception("Unknown scheduler")
+
+            scheduler = {
+                "scheduler": scheduler,
+                "name": "train/lr",
+                "interval": "epoch",
+            }
+
+        else:
+            from torch.optim import lr_scheduler
+
+            if self.trainer.estimated_stepping_batches in [None, float("inf")]:
+                estimated_stepping_batches = 10_000
+            else:
+                estimated_stepping_batches = self.trainer.estimated_stepping_batches
+            print("estimated_stepping_batches", estimated_stepping_batches)
+
+            if self.scheduler == "CosineAnnealingLR":
+                scheduler = lr_scheduler.CosineAnnealingLR(
+                    optimizer, T_max=estimated_stepping_batches
+                )
+            elif self.scheduler == "OneCycleLR":
+                scheduler = lr_scheduler.OneCycleLR(
+                    optimizer,
+                    max_lr=self.learning_rate,
+                    total_steps=estimated_stepping_batches,
+                )
+            else:
+                raise Exception("Unknown scheduler")
+
+            scheduler = {
+                "scheduler": scheduler,
+                "name": "train/lr",
+                "interval": "step",
+            }
+
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
