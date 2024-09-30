@@ -15,6 +15,9 @@ setup(
         "transformers",
         "torchmetrics",
         "wandb",
+        "lightning",
+        "einops",
+        "progressive_scheduling@git+https://github.com/cwallenwein/progressive-scheduling.git",
     ],
     # scripts=["scripts/prepare_dataset.py", "scripts/train_model.py"],
 )
