@@ -2,6 +2,7 @@ import time
 from typing import Annotated
 
 import lightning.pytorch as pl
+import torch
 import torchmetrics
 from progressive_scheduling import CosineAnnealingLR, OneCycleLR
 from torch import Tensor, nn, optim
@@ -19,6 +20,7 @@ class BertModelForMLM(pl.LightningModule):
         batch_size: int = 16,
         learning_rate: float = 1e-4,
         scheduler: str = "CosineAnnealingLR",
+        compile: bool = False,
     ):
         super().__init__()
         self.config: BertConfig = config
@@ -39,6 +41,13 @@ class BertModelForMLM(pl.LightningModule):
         self.mlm_accuracy = torchmetrics.Accuracy(
             task="multiclass", num_classes=config.vocab_size, average="micro"
         )
+
+        # only compile submodules to fix lightning errors when calling self.log
+        if compile:
+            self.bert = torch.compile(self.bert)
+            self.masked_language_modeling_head = torch.compile(
+                self.masked_language_modeling_head
+            )
 
         self.save_hyperparameters()
 

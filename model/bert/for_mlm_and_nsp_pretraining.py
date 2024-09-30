@@ -1,5 +1,6 @@
 import time
 
+import torch
 import torchmetrics
 from torch import nn
 
@@ -15,13 +16,20 @@ class BertModelForMLMandandNSP(BertModelForMLM):
         batch_size: int = 16,
         learning_rate: float = 1e-4,
         scheduler: str = "CosineAnnealingLR",
+        compile: bool = False,
     ):
-        super().__init__(config, batch_size, learning_rate, scheduler)
+        super().__init__(config, batch_size, learning_rate, scheduler, compile=compile)
 
         # next sentence prediction
         self.next_sentence_prediction_head = nn.Linear(config.d_model, 1, bias=False)
         self.nsp_loss_fn = nn.BCEWithLogitsLoss()
         self.nsp_accuracy = torchmetrics.Accuracy(task="binary", average="micro")
+
+        # only compile submodules to fix lightning errors when calling self.log
+        if compile:
+            self.next_sentence_prediction_head = torch.compile(
+                self.next_sentence_prediction_head
+            )
 
     def forward(
         self,

@@ -1,6 +1,7 @@
 from typing import Annotated
 
 import lightning.pytorch as pl
+import torch
 import torchmetrics
 from torch import Tensor, nn, optim
 
@@ -17,6 +18,7 @@ class BertModelForSequenceClassification(pl.LightningModule):
         learning_rate: float = 1e-4,
         scheduler: str = "CosineAnnealingLR",
         p_dropout: float = 0.1,
+        compile: bool = False,
     ):
         super().__init__()
         self.config = pretrained_model.config
@@ -45,6 +47,11 @@ class BertModelForSequenceClassification(pl.LightningModule):
         for module in self.bert.modules():
             if isinstance(module, nn.Dropout):
                 module.p = p_dropout
+
+        # only compile submodules to fix lightning errors when calling self.log
+        if compile:
+            self.bert = torch.compile(self.bert)
+            self.classification_head = torch.compile(self.classification_head)
 
         self.save_hyperparameters()
 
