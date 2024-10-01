@@ -1,4 +1,3 @@
-import time
 from typing import Annotated
 
 import lightning.pytorch as pl
@@ -6,8 +5,8 @@ import torch
 import torchmetrics
 from torch import Tensor, nn, optim
 
-from model.bert.config import BertConfig
-from model.bert.model import BertModel
+from bert.model.bert.config import BertConfig
+from bert.model.bert.model import BertModel
 
 
 class BertModelForMLM(pl.LightningModule):
@@ -71,15 +70,6 @@ class BertModelForMLM(pl.LightningModule):
         return mlm_output
 
     def training_step(self, batch, batch_idx):
-        # TODO: fix this time tracking
-        #       it's only tracking the forward pass but not actually the total time of the step
-        #       possible fixes:
-        #           add a training progress callback that tracks the training progress and the step duration
-        #               + separate tracking the time per step from the actual model 👍
-        #               + can be easily enabled and disabled
-        #               + lr scheduling can be turned into metric-based scheduling and can be completely controlled from within the training code (no controll inside of progressive_scheduling)
-        #               +
-        step_start_time = time.time()
         masked_language_modeling_output = self(**batch)
 
         masked_tokens = batch["masked_tokens_mask"]
@@ -88,18 +78,13 @@ class BertModelForMLM(pl.LightningModule):
         mlm_loss = self.mlm_loss_fn(
             masked_language_modeling_output, masked_token_labels
         )
-        step_duration = time.time() - step_start_time
         # calculate accuracy
         mlm_acc = self.mlm_accuracy(
             masked_language_modeling_output, masked_token_labels
         )
 
-        # print(self.optimizers().param_groups[0]["lr"])
-
         self.log("train/loss", mlm_loss)
         self.log("train/mlm_acc", mlm_acc)
-        self.log("train/step_duration", step_duration)
-        self.log("train/step_duration_per_sample", step_duration / self.batch_size)
 
         return mlm_loss
 
@@ -112,7 +97,6 @@ class BertModelForMLM(pl.LightningModule):
             weight_decay=0.01,
         )
 
-        print("self.with_progressive_scheduling", self.with_progressive_scheduling)
         if self.with_progressive_scheduling:
             import progressive_scheduling
 
@@ -125,12 +109,15 @@ class BertModelForMLM(pl.LightningModule):
             else:
                 raise Exception("Unknown scheduler")
 
+            # TODO: figure out why I can't remove reduce_on_plateau
             scheduler = {
                 "scheduler": scheduler,
                 "name": "train/lr",
-                "interval": "epoch",
+                "interval": "step",
+                "monitor": "train/progress",
+                "strict": True,
+                "reduce_on_plateau": True,
             }
-
         else:
             from torch.optim import lr_scheduler
 
@@ -138,7 +125,6 @@ class BertModelForMLM(pl.LightningModule):
                 estimated_stepping_batches = 10_000
             else:
                 estimated_stepping_batches = self.trainer.estimated_stepping_batches
-            print("estimated_stepping_batches", estimated_stepping_batches)
 
             if self.scheduler == "CosineAnnealingLR":
                 scheduler = lr_scheduler.CosineAnnealingLR(

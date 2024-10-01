@@ -5,8 +5,8 @@ import torch
 import torchmetrics
 from torch import Tensor, nn, optim
 
-from model.bert.model import BertModel
-from model.lr_scheduler import DynamicWarmupStableDecayScheduler
+from bert.model.bert.model import BertModel
+from bert.model.lr_scheduler import DynamicWarmupStableDecayScheduler
 
 
 class BertModelForSequenceClassification(pl.LightningModule):

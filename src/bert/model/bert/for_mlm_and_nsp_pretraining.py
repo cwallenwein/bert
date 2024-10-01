@@ -4,8 +4,8 @@ import torch
 import torchmetrics
 from torch import nn
 
-from model.bert.config import BertConfig
-from model.bert.for_mlm_pretraining import BertModelForMLM
+from bert.model.bert.config import BertConfig
+from bert.model.bert.for_mlm_pretraining import BertModelForMLM
 
 
 class BertModelForMLMandandNSP(BertModelForMLM):

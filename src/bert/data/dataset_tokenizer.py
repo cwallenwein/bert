@@ -31,6 +31,7 @@ class DatasetTokenizer:
         packing: bool = False,
         batch_size: int = 1_000,
         num_proc: Optional[int] = None,
+        keep_in_memory: bool = False,
         save: bool = False
     ) -> Dataset:
         """ pack multiple samples into one """
@@ -46,7 +47,7 @@ class DatasetTokenizer:
             remove_columns=self.dataset.column_names,
             desc="Tokenizing dataset",
             num_proc=num_proc,
-            keep_in_memory=True,
+            keep_in_memory=keep_in_memory,
             fn_kwargs={
                 "context_length": context_length
             },

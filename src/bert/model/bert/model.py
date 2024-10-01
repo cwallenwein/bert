@@ -3,14 +3,14 @@ from typing import Annotated
 import torch
 from torch import Tensor, nn
 
-from model.activation_functions import GatedLinearUnit
-from model.attention import MultiHeadAttention
-from model.bert.config import BertConfig
-from model.positional_information import (
+from bert.model.activation_functions import GatedLinearUnit
+from bert.model.attention import MultiHeadAttention
+from bert.model.bert.config import BertConfig
+from bert.model.positional_information import (
     ScaledSinusoidalPositionalEmbeddings,
     SinusoidalPositionalEmbeddings,
 )
-from model.util import init_xavier
+from bert.model.util import init_xavier
 
 
 class BertModel(nn.Module):

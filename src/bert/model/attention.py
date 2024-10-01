@@ -6,7 +6,7 @@ from einops import einsum, rearrange
 from torch import Tensor, nn
 from torch.nn import functional as F
 
-from model.util import init_xavier
+from bert.model.util import init_xavier
 
 # TODO: Fix attention mask for flash attention
 # TODO: add p_attention_dropout

@@ -51,7 +51,7 @@ class MaskedLanguageModelingPreprocessor:
         if cleanup_cache:
             self.dataset.cleanup_cache_files()
 
-    def __call__(self, num_samples, context_length: int = 128, batch_size: int = 1_000, num_proc: Optional[int] = None) -> Dataset:
+    def __call__(self, num_samples, context_length: int = 128, batch_size: int = 1_000, num_proc: Optional[int] = None, keep_in_memory: bool = False) -> Dataset:
         num_samples = min(len(self.dataset), num_samples)
         dataset = self.dataset.select(range(num_samples)).map(
             self.mask_fn,
@@ -59,7 +59,7 @@ class MaskedLanguageModelingPreprocessor:
             batch_size=batch_size,
             desc="Masking dataset",
             num_proc=num_proc,
-            keep_in_memory=True,
+            keep_in_memory=keep_in_memory,
             features=Features({
                 "attention_mask": Sequence(feature=Value(dtype="bool", id=None), length=context_length, id=None),
                 "input_ids": Sequence(feature=Value(dtype="int16", id=None), length=context_length, id=None),

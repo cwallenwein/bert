@@ -12,7 +12,7 @@ class BertDatasetPreprocessor:
         self.tokenizer = tokenizer
         self.context_length = context_length
 
-    def preprocess(self, num_tokens: int):
+    def preprocess(self, num_tokens: int, keep_in_memory: bool = False):
         assert num_tokens % self.context_length == 0
         num_samples = num_tokens // self.context_length
 
@@ -20,7 +20,7 @@ class BertDatasetPreprocessor:
 
         # tokenize dataset
         dataset_tokenizer = DatasetTokenizer(dataset, tokenizer=self.tokenizer)
-        tokenized_dataset = dataset_tokenizer(context_length=self.context_length, batch_size=128, num_proc=8)
+        tokenized_dataset = dataset_tokenizer(context_length=self.context_length, batch_size=128, num_proc=8, keep_in_memory=keep_in_memory)
 
         if len(tokenized_dataset) < num_samples:
             # upsample dataset
@@ -29,7 +29,7 @@ class BertDatasetPreprocessor:
 
         # mask dataset
         mlm_preprocessor = MaskedLanguageModelingPreprocessor(tokenized_dataset, self.tokenizer)
-        masked_dataset = mlm_preprocessor(num_samples=num_samples, context_length=self.context_length, batch_size=128, num_proc=8)
+        masked_dataset = mlm_preprocessor(num_samples=num_samples, context_length=self.context_length, batch_size=128, num_proc=8, keep_in_memory=keep_in_memory)
 
         return masked_dataset
 
