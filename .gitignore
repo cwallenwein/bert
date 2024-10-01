@@ -1,10 +1,11 @@
 bert.egg-info
 build
-model/pretrained/pytorch/
-model/pretrained/tensorflow/
-data/datasets/
+src/bert/model/pretrained/pytorch/
+src/bert/model/pretrained/tensorflow/
+datasets/
 .idea
 wandb
+private_key.pem
 
 *.pt
 __pycache__
