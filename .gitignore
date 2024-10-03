@@ -4,12 +4,10 @@ src/bert/model/pretrained/pytorch/
 src/bert/model/pretrained/tensorflow/
 datasets/
 .idea
-wandb
 private_key.pem
+logs
 
 *.pt
 __pycache__
-lightning_logs
 tmp
-/BERT
 .DS_Store
