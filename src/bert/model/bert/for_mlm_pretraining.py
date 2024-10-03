@@ -1,50 +1,72 @@
 from typing import Annotated
 
-import lightning.pytorch as pl
 import torch
 import torchmetrics
+from lightning.pytorch import LightningModule
 from torch import Tensor, nn, optim
 
 from bert.model.bert.config import BertConfig
 from bert.model.bert.model import BertModel
 
 
-class BertModelForMLM(pl.LightningModule):
+class BertModelForMLM(LightningModule):
     # TODO: implement and test flash attention
     # TODO: add an option for weight tying to the config
     def __init__(
         self,
-        config: BertConfig,
-        batch_size: int = 16,
-        learning_rate: float = 1e-4,
-        scheduler: str = "CosineAnnealingLR",
-        with_progressive_scheduling: bool = False,
+        d_model: int = 128,
+        n_layers: int = 2,
+        n_heads: int = 2,
+        context_length: int = 128,
+        vocab_size: int = 30522,
+        n_segments: int = 2,
+        initializer_range: float = 0.02,
+        feed_forward_activation: str = "gelu",
+        feed_forward_intermediate_size: int = 512,
+        feed_forward_bias: bool = True,
+        p_embedding_dropout: float = 0.1,
+        p_attention_dropout: float = 0.1,
+        p_feed_forward_dropout: float = 0.1,
+        attention_implementation: str = "pytorch",
+        positional_information_type: str = "learned",
+        attention_bias: bool = True,
+        layer_norm: str = "pre",
+        add_final_layer_norm: bool = False,
         compile: bool = False,
     ):
         super().__init__()
-        self.config: BertConfig = config
-        self.bert = BertModel(config)
-        self.learning_rate = learning_rate
-        self.batch_size = batch_size
-
-        assert scheduler in ["CosineAnnealingLR", "OneCycleLR"]
-        # TODO: fix support for DynamicWarmupStableDecayScheduler
-        self.scheduler = scheduler
-        self.with_progressive_scheduling = with_progressive_scheduling
-
-        # masked language modeling
-        self.masked_language_modeling_head = nn.Linear(
-            config.d_model, config.vocab_size, bias=False
+        self.config: BertConfig = BertConfig(
+            d_model=d_model,
+            n_layers=n_layers,
+            n_heads=n_heads,
+            context_length=context_length,
+            vocab_size=vocab_size,
+            n_segments=n_segments,
+            initializer_range=initializer_range,
+            feed_forward_activation=feed_forward_activation,
+            feed_forward_intermediate_size=feed_forward_intermediate_size,
+            feed_forward_bias=feed_forward_bias,
+            p_embedding_dropout=p_embedding_dropout,
+            p_attention_dropout=p_attention_dropout,
+            p_feed_forward_dropout=p_feed_forward_dropout,
+            attention_implementation=attention_implementation,
+            positional_information_type=positional_information_type,
+            attention_bias=attention_bias,
+            layer_norm=layer_norm,
+            add_final_layer_norm=add_final_layer_norm,
+            with_next_sentence_prediction=False,
         )
+
+        self.bert = BertModel(self.config)
+        self.masked_language_modeling_head = nn.Linear(d_model, vocab_size, bias=False)
         # TODO: check if softmax and cross entropy loss is combined?
         self.mlm_loss_fn = nn.CrossEntropyLoss()
         self.mlm_accuracy = torchmetrics.Accuracy(
-            task="multiclass", num_classes=config.vocab_size, average="micro"
+            task="multiclass", num_classes=vocab_size, average="micro"
         )
 
         # only compile submodules to fix lightning errors when calling self.log
         if compile:
-            print("Compiling the model")
             self.bert = torch.compile(self.bert)
             self.masked_language_modeling_head = torch.compile(
                 self.masked_language_modeling_head
@@ -91,58 +113,9 @@ class BertModelForMLM(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = optim.Adam(
             self.parameters(),
-            lr=self.learning_rate,
+            lr=1e-4,
             betas=(0.9, 0.98),
             eps=1e-12,
             weight_decay=0.01,
         )
-
-        if self.with_progressive_scheduling:
-            import progressive_scheduling
-
-            if self.scheduler == "CosineAnnealingLR":
-                scheduler = progressive_scheduling.CosineAnnealingLR(optimizer)
-            elif self.scheduler == "OneCycleLR":
-                scheduler = progressive_scheduling.OneCycleLR(
-                    optimizer, max_lr=self.learning_rate
-                )
-            else:
-                raise Exception("Unknown scheduler")
-
-            # TODO: figure out why I can't remove reduce_on_plateau
-            scheduler = {
-                "scheduler": scheduler,
-                "name": "train/lr",
-                "interval": "step",
-                "monitor": "train/progress",
-                "strict": True,
-                "reduce_on_plateau": True,
-            }
-        else:
-            from torch.optim import lr_scheduler
-
-            if self.trainer.estimated_stepping_batches in [None, float("inf")]:
-                estimated_stepping_batches = 10_000
-            else:
-                estimated_stepping_batches = self.trainer.estimated_stepping_batches
-
-            if self.scheduler == "CosineAnnealingLR":
-                scheduler = lr_scheduler.CosineAnnealingLR(
-                    optimizer, T_max=estimated_stepping_batches
-                )
-            elif self.scheduler == "OneCycleLR":
-                scheduler = lr_scheduler.OneCycleLR(
-                    optimizer,
-                    max_lr=self.learning_rate,
-                    total_steps=estimated_stepping_batches,
-                )
-            else:
-                raise Exception("Unknown scheduler")
-
-            scheduler = {
-                "scheduler": scheduler,
-                "name": "train/lr",
-                "interval": "step",
-            }
-
-        return {"optimizer": optimizer, "lr_scheduler": scheduler}
+        return optimizer

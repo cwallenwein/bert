@@ -1,0 +1,15 @@
+# lightning.pytorch==2.4.0
+seed_everything: 0
+trainer:
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: "BERT"
+      save_dir: "logs"
+      job_type: "test"
+      log_model: True
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+      init_args:
+        logging_interval: "step"
+  
