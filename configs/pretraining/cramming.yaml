@@ -1,0 +1,41 @@
+# lightning.pytorch==2.4.0
+seed_everything: 0
+trainer:
+  gradient_clip_val: 0.5
+  precision: bf16-mixed
+  accelerator: auto
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: "BERT"
+      save_dir: "logs"
+      job_type: "pretrain"
+      log_model: true
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+      init_args:
+        logging_interval: "step"
+model:
+  d_model: 768
+  n_layers: 12
+  context_length: 128
+  n_heads: 12
+  feed_forward_intermediate_size: 3072
+  attention_implementation: pytorch
+  positional_information_type: learned
+  p_embedding_dropout: 0.0
+  p_attention_dropout: 0.0
+  p_feed_forward_dropout: 0.0
+  attention_bias: false
+  feed_forward_bias: false
+  feed_forward_activation: gelu
+  add_final_layer_norm: true
+optimizer:
+  class_path: torch.optim.Adam
+  init_args:
+    lr: 0.01
+    betas:
+    - 0.9
+    - 0.999
+    eps: 1.0e-08
+    weight_decay: 0.0

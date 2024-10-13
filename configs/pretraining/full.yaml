@@ -10,7 +10,7 @@ trainer:
     init_args:
       project: "BERT"
       save_dir: "logs"
-      job_type: "test"
+      job_type: "pretrain"
       log_model: true
   callbacks:
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
