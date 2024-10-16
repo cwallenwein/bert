@@ -1,19 +1,22 @@
 # lightning.pytorch==2.4.0
 seed_everything: 0
 trainer:
+  # accumulate_grad_batches: 10
   gradient_clip_val: 0.5
-  precision: bf16-mixed
+  precision: bf16-true
   accelerator: auto
-  log_every_n_steps: 1
+  log_every_n_steps: 10
   # max_steps: 100
   # max_time: 
   #   hours: 24
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
-      project: "BERT"
-      save_dir: "logs"
-      job_type: "pretrain"
+      project: BERT
+      save_dir: logs
+      job_type: pretraining
+      tags:
+        - test
       log_model: true
   callbacks:
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
@@ -30,10 +33,12 @@ model:
   p_embedding_dropout: 0.0
   p_attention_dropout: 0.0
   p_feed_forward_dropout: 0.0
-  attention_bias: false
-  feed_forward_bias: false
+  attention_bias: true
+  feed_forward_bias: true
   feed_forward_activation: gelu
   add_final_layer_norm: true
+  layer_norm: pre
+  compile: true
   optimizer:
     class_path: torch.optim.Adam
     init_args:
@@ -46,8 +51,8 @@ model:
   scheduler:
     class_path: torch.optim.lr_scheduler.OneCycleLR
     init_args:
-      max_lr: 0.0089
+      # max_lr: 0.0089
       # total_steps: 100
 data:
-  dataset_dir: datasets/mlm-fineweb-10BT
-  batch_size: 10
+  # dataset_dir: datasets/mlm-fineweb-10BT
+  # batch_size: 10
