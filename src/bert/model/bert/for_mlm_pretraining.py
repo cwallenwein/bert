@@ -3,6 +3,7 @@ from typing import Annotated
 import torch
 import torchmetrics
 from lightning.pytorch import LightningModule
+from lightning.pytorch.cli import LRSchedulerCallable, OptimizerCallable
 from torch import Tensor, nn, optim
 
 from bert.model.bert.config import BertConfig
@@ -33,6 +34,8 @@ class BertModelForMLM(LightningModule):
         layer_norm: str = "pre",
         add_final_layer_norm: bool = False,
         compile: bool = False,
+        optimizer: OptimizerCallable = optim.Adam,
+        scheduler: LRSchedulerCallable = optim.lr_scheduler.ConstantLR,
     ):
         super().__init__()
         self.config: BertConfig = BertConfig(
@@ -73,6 +76,8 @@ class BertModelForMLM(LightningModule):
             )
 
         self.save_hyperparameters()
+        self.optimizer = optimizer
+        self.scheduler = scheduler
 
     def forward(
         self,
@@ -111,11 +116,11 @@ class BertModelForMLM(LightningModule):
         return mlm_loss
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(
-            self.parameters(),
-            lr=1e-4,
-            betas=(0.9, 0.98),
-            eps=1e-12,
-            weight_decay=0.01,
-        )
-        return optimizer
+        optimizer = self.optimizer(self.parameters())
+        lr_scheduler_config = {
+            "scheduler": self.scheduler(optimizer),
+            "interval": "step",
+            "name": "train/lr",
+        }
+
+        return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}

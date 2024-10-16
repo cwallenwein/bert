@@ -9,7 +9,7 @@ from datasets import Dataset
 
 class DataModule(LightningDataModule):
 
-    def __init__(self, dataset_dir, batch_size=8):
+    def __init__(self, dataset_dir, batch_size):
         super().__init__()
         self.dataset_dir = dataset_dir
         self.batch_size = batch_size
@@ -27,6 +27,7 @@ def cli_main():
         DataModule,
         save_config_callback=WandbSaveConfigCallback,
         save_config_kwargs={"save_to_log_dir": False},
+        auto_configure_optimizers=False,
     )
 
 

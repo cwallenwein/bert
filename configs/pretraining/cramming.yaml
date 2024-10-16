@@ -4,6 +4,10 @@ trainer:
   gradient_clip_val: 0.5
   precision: bf16-mixed
   accelerator: auto
+  log_every_n_steps: 1
+  # max_steps: 100
+  # max_time: 
+  #   hours: 24
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
@@ -30,12 +34,20 @@ model:
   feed_forward_bias: false
   feed_forward_activation: gelu
   add_final_layer_norm: true
-optimizer:
-  class_path: torch.optim.Adam
-  init_args:
-    lr: 0.01
-    betas:
-    - 0.9
-    - 0.999
-    eps: 1.0e-08
-    weight_decay: 0.0
+  optimizer:
+    class_path: torch.optim.Adam
+    init_args:
+      lr: 1.0e-4
+      betas:
+      - 0.9
+      - 0.98
+      eps: 1.0e-12
+      weight_decay: 0.01
+  scheduler:
+    class_path: torch.optim.lr_scheduler.OneCycleLR
+    init_args:
+      max_lr: 0.0089
+      # total_steps: 100
+data:
+  dataset_dir: datasets/mlm-fineweb-10BT
+  batch_size: 10
