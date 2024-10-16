@@ -33,7 +33,7 @@ class BertModel(nn.Module):
         input_ids: Annotated[Tensor, torch.int16, "batch sequence_length"],
         token_type_ids: Annotated[Tensor, torch.int16, "batch sequence_length"],
         attention_mask: Annotated[Tensor, torch.int16, "batch sequence_length"],
-        **kwargs
+        **kwargs,
     ):
         # TODO: define dimensions of return type
         # TODO: define default token_type_ids and attention_mask
@@ -90,7 +90,11 @@ class BertEmbedding(nn.Module):
         input_ids: Annotated[Tensor, torch.int16, "batch sequence_length"],
         segment_ids: Annotated[Tensor, torch.int16, "batch sequence_length"],
     ):
-        sequence_length = input_ids.size(1)
+        assert (
+            len(input_ids.shape) > 1
+        ), f"input_ids.shape is {input_ids.shape}. Please set data.batch_size"
+
+        sequence_length = input_ids.size(-1)
         token_position = torch.arange(sequence_length, device=input_ids.device)
 
         token_embeddings = self.token_embedding_matrix(input_ids)
