@@ -50,7 +50,7 @@ model:
       weight_decay: 0.01
   scheduler:
     class_path: torch.optim.lr_scheduler.OneCycleLR
-    init_args:
+    # init_args:
       # max_lr: 0.0089
       # total_steps: 100
 data:
