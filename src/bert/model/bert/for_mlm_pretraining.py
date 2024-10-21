@@ -70,6 +70,11 @@ class BertModelForMLM(LightningModule):
 
         # only compile submodules to fix lightning errors when calling self.log
         if compile:
+            if not hasattr(torch, "compile"):
+                warnings.warn(
+                    "Warning: torch.compile is not available. Skipping compilation."
+                )
+
             self.bert = torch.compile(self.bert)
             self.masked_language_modeling_head = torch.compile(
                 self.masked_language_modeling_head
