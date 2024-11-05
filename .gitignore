@@ -3,6 +3,7 @@ build
 src/bert/model/pretrained/pytorch/
 src/bert/model/pretrained/tensorflow/
 datasets/
+tokenizers/
 .idea
 private_key.pem
 logs
