@@ -16,11 +16,18 @@ setup(
         "torch>=2.0",
         "lightning[pytorch-extra]",
         "datasets",
-        "transformers",
+        "transformers[torch]",
         "torchmetrics",
         "einops",
         "wandb",
         "progressive_scheduling@git+https://github.com/cwallenwein/progressive-scheduling.git",
+        "evaluate",
+        "tqdm",
+        "ipykernel",
+        "python-dotenv"
     ],
+    extras_require={
+        "dev": ["black", "flake8", "isort"],
+    },
     scripts=["scripts/pretrain.py"],
 )
