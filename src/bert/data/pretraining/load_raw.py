@@ -9,7 +9,11 @@ def download_hf_dataset(
     *hf_load_dataset_args,
     **hf_load_dataset_kwargs,
 ):
-    dataset = load_dataset(*hf_load_dataset_args, **hf_load_dataset_kwargs)
+    dataset = load_dataset(
+        keep_in_memory=True,
+        *hf_load_dataset_args,
+        **hf_load_dataset_kwargs,
+    )
 
     raw_datasets_dir = get_datasets_raw_dir()
     dataset_path = Path(raw_datasets_dir) / dataset_name
