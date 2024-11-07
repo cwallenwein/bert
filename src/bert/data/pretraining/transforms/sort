@@ -1,0 +1,2 @@
+sort_by: str = average (unigram) token prevalence
+sort_order: str = asc/desc

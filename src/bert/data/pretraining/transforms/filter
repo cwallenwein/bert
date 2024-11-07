@@ -1,0 +1,2 @@
+filter_by: compression_ratio
+filter_value: float = 0.3
