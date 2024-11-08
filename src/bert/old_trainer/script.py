@@ -5,8 +5,11 @@ from bert.old_trainer import TrainerForPreTraining
 from bert.old_trainer.arguments import TrainingArguments
 from datasets import load_from_disk
 
+# import torch
+
 
 def train(args):
+    print("compile:", args["compile"])
     model = BertModelForMLM(
         d_model=args["d_model"],
         n_layers=args["n_layers"],
@@ -18,6 +21,8 @@ def train(args):
         p_feed_forward_dropout=args["p_feed_forward_dropout"],
         feed_forward_activation=args["feed_forward_activation"],
         feed_forward_intermediate_size=args["feed_forward_intermediate_size"],
+        compile=args["compile"],
+        # optimizer=torch.optim.AdamW,
     )
     training_args = TrainingArguments.from_dict(args)
     trainer = TrainerForPreTraining(training_args)
@@ -44,6 +49,7 @@ parser.add_argument("--p_attention_dropout", type=float, default=0.1)
 parser.add_argument("--p_feed_forward_dropout", type=float, default=0.1)
 parser.add_argument("--feed_forward_activation", type=str, default="gelu")
 parser.add_argument("--feed_forward_intermediate_size", type=int, default=512)
+parser.add_argument("--compile", action=argparse.BooleanOptionalAction)
 
 # Training arguments
 # parser.add_argument("--batch_size", type=int, default=8)
