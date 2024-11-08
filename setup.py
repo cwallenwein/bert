@@ -24,7 +24,9 @@ setup(
         "evaluate",
         "tqdm",
         "ipykernel",
-        "python-dotenv"
+        "python-dotenv",
+        "nltk",
+        "fastcore",
     ],
     extras_require={
         "dev": ["black", "flake8", "isort"],
