@@ -27,6 +27,7 @@ class TrainerForPreTraining:
         self,
         model: L.LightningModule,
         dataset: Dataset,
+        learning_rate: float = 1e-4,
         max_steps: int = None,
         # max_epochs: int = None,
         max_time_in_min: int = None,
@@ -65,7 +66,9 @@ class TrainerForPreTraining:
         # prepare optimizer & scheduler
         # TODO fix this so the assert only occurrs if needed (for OneCycleLR)
         assert max_steps is not None, "please set max_steps"
-        optimizer_and_scheduler = model.configure_optimizers()
+        optimizer_and_scheduler = model.configure_optimizers(
+            training_steps_total=max_steps, learning_rate=learning_rate
+        )
         optimizer = optimizer_and_scheduler["optimizer"]
         scheduler = optimizer_and_scheduler["lr_scheduler"]["scheduler"]
 

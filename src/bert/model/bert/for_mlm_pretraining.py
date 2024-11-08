@@ -82,8 +82,8 @@ class BertModelForMLM(LightningModule):
             )
 
         self.save_hyperparameters()
-        self.optimizer = optimizer
-        self.scheduler = scheduler
+        # self.optimizer = optimizer
+        # self.scheduler = scheduler
 
     def forward(
         self,
@@ -122,10 +122,27 @@ class BertModelForMLM(LightningModule):
 
         return mlm_loss
 
-    def configure_optimizers(self):
-        optimizer = self.optimizer(self.parameters())
+    def configure_optimizers(
+        self, training_steps_total: int, learning_rate: float = 1e-4
+    ):
+        optimizer = optim.Adam(
+            self.parameters(),
+            lr=learning_rate,
+            betas=(0.9, 0.98),
+            eps=1e-12,
+            weight_decay=0.01,
+        )
+
+        scheduler = optim.lr_scheduler.OneCycleLR(
+            optimizer=optimizer,
+            max_lr=learning_rate,
+            total_steps=training_steps_total,
+        )
+
+        # optimizer = self.optimizer(self.parameters())
         lr_scheduler_config = {
-            "scheduler": self.scheduler(optimizer),
+            "scheduler": scheduler,
+            # "scheduler": self.scheduler(optimizer),
             "interval": "step",
             "name": "train/lr",
         }
