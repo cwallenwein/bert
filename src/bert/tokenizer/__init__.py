@@ -1,3 +1,3 @@
-from .load import load  # noqa
+from .load import load_tokenizer  # noqa
 
-__all__ = ["load"]
+__all__ = ["load_tokenizer"]
