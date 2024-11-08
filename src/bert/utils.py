@@ -82,3 +82,22 @@ def get_datasets_processed_dir() -> Path:
     repository_root_dir = get_repository_root_dir()
 
     return Path(repository_root_dir / datasets_processed_dir)
+
+
+def get_datasets_cache_dir() -> Path:
+    """
+    Get the absolute path to the datasets directory based on the DATASETS_PROCESSED_DIR
+    environment variable.
+
+    Returns:
+        Path: Absolute path to the tokenizers directory
+    """
+    datasets_cache_dir = os.getenv("DATASETS_CACHE_DIR")
+    assert datasets_cache_dir is not None, "DATASETS_CACHE_DIR must be set"
+    assert not os.path.isabs(
+        datasets_cache_dir
+    ), "DATASETS_CACHE_DIR must be relative path from repo root"
+
+    repository_root_dir = get_repository_root_dir()
+
+    return Path(repository_root_dir / datasets_cache_dir)
