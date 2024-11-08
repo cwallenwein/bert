@@ -1,4 +1,4 @@
-from bert.data.pretraining.masked_language_modeling.config import (
+from bert.data.pretraining.only_masked_language_modeling import (
     MaskedLanguageModelingDatasetConfig,
 )
 from datasets import Dataset

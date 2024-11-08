@@ -1,6 +1,3 @@
-import hashlib
-import json
-from dataclasses import dataclass
 from pathlib import Path
 
 from fastcore.transform import Pipeline
@@ -8,37 +5,19 @@ from lightning.pytorch import LightningDataModule
 from torch.utils.data import DataLoader
 
 from bert.data.pretraining.load_raw import load_local_hf_dataset
+from bert.data.pretraining.only_masked_language_modeling import (
+    MaskedLanguageModelingDatasetConfig,
+)
 from bert.data.pretraining.transforms import (
+    AddConfigTransform,
     MaskedLanguageModelingTransform,
     TokenizeTransform,
 )
-from bert.data.pretraining.transforms.info import AddConfigTransform
 from bert.tokenizer.load import load_tokenizer
 from bert.utils import get_datasets_processed_dir
 from datasets import Dataset, load_from_disk
 
-
-@dataclass
-class MaskedLanguageModelingDatasetConfig:
-    tokenizer_id_or_name: str
-    raw_dataset_name: str
-    num_samples: int = None
-    context_length: int = 128
-    p_mask: float = 0.15
-    p_replacement_mask: float = 0.8
-    p_replacement_random: float = 0.1
-
-    def to_string(self):
-        return json.dumps(self.__dict__, sort_keys=True)
-
-    @classmethod
-    def from_string(cls, string: str):
-        return MaskedLanguageModelingDatasetConfig(**json.loads(string))
-
-    def get_hash_value(self):
-        config_as_string = self.to_string()
-        hash = hashlib.md5(config_as_string.encode())
-        return hash.hexdigest()[:10]
+# data.context_length=128 data.num_samples=10000 data.p_mask=0.15 data.p_replacement_mask=0.8 data.p_replacement_random=0.1 data.raw_dataset_name=roleplay data.tokenizer_id_or_name=bert-base-uncased
 
 
 class MaskedLanguageModelingDataset(LightningDataModule):
