@@ -1,3 +1,4 @@
+import warnings
 from typing import Annotated
 
 import torch
@@ -90,14 +91,15 @@ class BertModelForMLM(LightningModule):
         attention_mask: Annotated[Tensor, "batch sequence_length"],
         masked_tokens_mask: Annotated[Tensor, "batch sequence_length"],
         token_type_ids: Annotated[Tensor, "batch sequence_length"] = None,
-        **kwargs,
+        **kwargxs,
     ):
         bert_output = self.bert(
             input_ids=input_ids,
             token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
-        mlm_output = self.masked_language_modeling_head(bert_output[masked_tokens_mask])
+        bert_output = bert_output[masked_tokens_mask]
+        mlm_output = self.masked_language_modeling_head(bert_output)
 
         return mlm_output
 
@@ -115,7 +117,7 @@ class BertModelForMLM(LightningModule):
             masked_language_modeling_output, masked_token_labels
         )
 
-        self.log("train/loss", mlm_loss)
+        self.log("train/loss", mlm_loss.item())
         self.log("train/mlm_acc", mlm_acc)
 
         return mlm_loss
@@ -129,3 +131,20 @@ class BertModelForMLM(LightningModule):
         }
 
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
+
+    def log(self, *args, **kwargs):
+        if self._trainer is not None:
+            super().log(*args, **kwargs)
+        else:
+            assert len(args) == 2
+            import wandb
+
+            metric_name = args[0]
+            metric_value = args[1]
+            wandb.log({metric_name: metric_value})
+
+    def save_hyperparameters(self, *args, **kwargs):
+        if self._trainer is not None:
+            super().save_hyperparameters(*args, **kwargs)
+        else:
+            warnings.warn("save_hyperparameters is not implemented yet")

@@ -31,7 +31,11 @@ class BertConfig:
         self.d_head = self.d_model // self.n_heads
         assert self.layer_norm in ["pre", "post"]
         assert self.feed_forward_activation in ["relu", "gelu", "glu"]
-        assert self.attention_implementation in ["default", "pytorch"]
+        assert self.attention_implementation in [
+            "from-scratch",
+            "pytorch",
+            "flash-attn",
+        ]
         assert self.positional_information_type in [
             "learned",
             "sinusoidal",

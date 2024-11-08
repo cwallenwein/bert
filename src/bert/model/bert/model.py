@@ -4,7 +4,7 @@ import torch
 from torch import Tensor, nn
 
 from bert.model.activation_functions import GatedLinearUnit
-from bert.model.attention import MultiHeadAttention
+from bert.model.attention import MultiHeadSelfAttention
 from bert.model.bert.config import BertConfig
 from bert.model.positional_information import (
     ScaledSinusoidalPositionalEmbeddings,
@@ -33,7 +33,7 @@ class BertModel(nn.Module):
         input_ids: Annotated[Tensor, torch.int16, "batch sequence_length"],
         token_type_ids: Annotated[Tensor, torch.int16, "batch sequence_length"],
         attention_mask: Annotated[Tensor, torch.int16, "batch sequence_length"],
-        **kwargs,
+        # **kwargs,
     ):
         # TODO: define dimensions of return type
         # TODO: define default token_type_ids and attention_mask
@@ -90,12 +90,13 @@ class BertEmbedding(nn.Module):
         input_ids: Annotated[Tensor, torch.int16, "batch sequence_length"],
         segment_ids: Annotated[Tensor, torch.int16, "batch sequence_length"],
     ):
-        assert (
-            len(input_ids.shape) > 1
-        ), f"input_ids.shape is {input_ids.shape}. Please set data.batch_size"
+        # assert (
+        #     len(input_ids.shape) > 1
+        # ), f"input_ids.shape is {input_ids.shape}. Please set data.batch_size"
 
         sequence_length = input_ids.size(-1)
-        token_position = torch.arange(sequence_length, device=input_ids.device)
+        # token_position = torch.arange(sequence_length, device=input_ids.device)
+        token_position = input_ids.new_ones(sequence_length).cumsum(0) - 1
 
         token_embeddings = self.token_embedding_matrix(input_ids)
         positional_information = self.positional_information(token_position)
@@ -152,7 +153,7 @@ class BertEncoderLayer(nn.Module):
                     bias=config.feed_forward_bias,
                 ),
             )
-        self.multi_head_attention = MultiHeadAttention(
+        self.multi_head_attention = MultiHeadSelfAttention(
             d_model=config.d_model,
             n_heads=config.n_heads,
             bias=config.attention_bias,
