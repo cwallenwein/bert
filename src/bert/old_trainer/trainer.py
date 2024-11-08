@@ -56,7 +56,7 @@ class TrainerForPreTraining:
         # prepare dataset
         dataset.set_format("torch", device=self.device)
         if max_steps is not None:
-            num_training_samples = self.training_args.macro_batch_size * max_steps
+            num_training_samples = self.training_args.micro_batch_size * max_steps
             assert num_training_samples <= len(
                 dataset
             ), "Not enough samples in dataset for training steps"
