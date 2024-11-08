@@ -22,7 +22,7 @@ def train(args):
     training_args = TrainingArguments.from_dict(args)
     trainer = TrainerForPreTraining(training_args)
 
-    dataset = load_from_disk("datasets/processed/mlm-fineweb-10BT/")
+    dataset = load_from_disk(args["data_dir"])
 
     if args["context_length"] is not None and args["training_steps"] is not None:
         # context_length = args["context_length"]
@@ -52,6 +52,9 @@ parser.add_argument("--macro_batch_size", type=int, default=128)
 parser.add_argument("--learning_rate", type=float, default=1e-4)
 parser.add_argument("--beta1", type=float, default=0.9)
 parser.add_argument("--beta2", type=float, default=0.999)
+
+# Data arguments
+parser.add_argument("--data_dir", type=str, required=True)
 
 
 # Other arguments
