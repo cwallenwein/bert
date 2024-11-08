@@ -7,7 +7,7 @@ import torch
 class TrainingArguments:
     micro_batch_size: int
     macro_batch_size: int
-    device: str = "mps"
+    device: str = "cpu"
     save_model_after_training: bool = True
     use_torch_compile: bool = True
     use_gradient_clipping: bool = True

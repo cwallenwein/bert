@@ -52,6 +52,9 @@ parser.add_argument("--macro_batch_size", type=int, default=128)
 parser.add_argument("--learning_rate", type=float, default=1e-4)
 parser.add_argument("--beta1", type=float, default=0.9)
 parser.add_argument("--beta2", type=float, default=0.999)
+parser.add_argument("--device", type=str, default="cpu")
+parser.add_argument("--model_dtype", type=str)
+
 
 # Data arguments
 parser.add_argument("--data_dir", type=str, required=True)
